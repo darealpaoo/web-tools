@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>Robux Calculator</title>
+		<style>
+			   /* Định dạng CSS */
+			   * {
+			     box-sizing: border-box;
+			     margin: 0;
+			     padding: 0;
+			   }
+
+			   body {
+			     font-family: Arial, sans-serif;
+			     background-color: #f5f5f5;
+			   }
+
+			   .container {
+			     max-width: 600px;
+			     margin: 0 auto;
+			     padding: 20px;
+			     background-color: #fff;
+			     border-radius: 5px;
+			     box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+			   }
+
+			   h1 {
+			     font-size: 32px;
+			     text-align: center;
+			     margin-bottom: 20px;
+			   }
+
+			   form {
+			     display: flex;
+			     flex-direction: column;
+			     gap: 20px;
+			   }
+
+			   label {
+			     font-size: 18px;
+			   }
+
+			   input[type="number"] {
+			     padding: 10px;
+			     font-size: 16px;
+			     border: 1px solid #ccc;
+			     border-radius: 5px;
+			   }
+
+			   button {
+			     padding: 10px;
+			     font-size: 16px;
+			     background-color: #0077cc;
+			     color: #fff;
+			     border: none;
+			     border-radius: 5px;
+			     cursor: pointer;
+			   }
+
+			   button:hover {
+			     background-color: #005fa3;
+			   }
+
+			   #result {
+			     margin-top: 20px;
+			     font-size: 18px;
+			     text-align: center;
+			   }
+
+			#amounts {
+			      width: 100%;
+			height: 50px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>Robux Calculator</h1>
+
+			<form>
+				<div class="form-group">
+					<label for="total">Số Robux đang có:</label>
+					<input type="number" id="total" name="total" required />
+				</div>
+
+				<div class="form-group">
+					<label for="amounts">Các số Robux cần tính (phân cách bằng dấu cách):</label>
+					<input type="text" id="amounts" name="amounts" required />
+				</div>
+
+				<button type="button" onclick="calculate()">Tính toán</button>
+			</form>
+
+			<div id="result"></div>
+		</div>
+
+		<script>
+			  // JavaScript
+			function calculate() {
+			  // Lấy giá trị của số robux đang có và các số robux cần tính
+			  let total = parseInt(document.getElementById('total').value);
+			  let amounts = document.getElementById('amounts').value.split(' ');
+			  let robuxArr = [];
+
+			  // Lặp qua mảng các số robux cần tính và chuyển đổi chúng thành số nguyên
+			  for (let i = 0; i < amounts.length; i++) {
+			    let robux = parseInt(amounts[i]);
+			    if (!isNaN(robux)) {
+			      robuxArr.push(robux);
+			    }
+			  }
+
+			  // Tìm số robux cần gộp lại
+			  let result = findOptimal(robuxArr, total);
+
+			  // Hiển thị kết quả
+			  let output = '';
+			  if (result.method === 'none') {
+			    output = 'Không thể tìm phương pháp gộp lại để đạt được số Robux cần tính.';
+			  } else {
+			    let methodStr = result.method.join(' + ');
+			    let sum = result.method.reduce((a, b) => a + b, 0);
+			    //output = `Hãy sử dụng ${methodStr} là phương pháp tối ưu nhất.\n${methodStr} = ${sum}\n`;
+			    output = `${methodStr} = ${sum}\n`;
+			  }
+			  document.getElementById('result').textContent = output;
+			}
+
+			function findOptimal(robuxArr, total) {
+			 // Sắp xếp mảng các số robux cần tính theo thứ tự giảm dần
+			    robuxArr.sort((a, b) => b - a);
+				
+			 // Tạo một mảng để lưu trữ phương pháp gộp lại tối ưu
+			    let method = [];
+
+			 // Lặp qua các số robux cần tính và kiểm tra x
+			    for (let i = 0; i < robuxArr.length; i++) {
+			        let sum = robuxArr[i];
+			        let tempMethod = [robuxArr[i]];
+
+			        for (let j = i + 1; j < robuxArr.length; j++) {
+			            if (sum + robuxArr[j] <= total) {
+			              sum += robuxArr[j];
+			              tempMethod.push(robuxArr[j]);
+			            }
+			        }
+
+						if (sum <= total && sum > method.reduce((a, b) => a + b, 0)) {
+			            method = tempMethod;
+						}
+			        }
+
+			        // Trả về phương pháp gộp lại tối ưu
+			        if (method.length === 0) {
+			          return {method: 'none'};
+			        } else {
+			          return {method: method};
+			        }
+			      }
+		</script>
+	</body>
+</html>
