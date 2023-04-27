@@ -60,6 +60,7 @@
 	function openTabs() {
 	var list = document.getElementById("list").value.trim().split("\n");
 	var urlPattern = "https://www.roblox.com/search/users?keyword=";
+	var openedKeywords = [];
 	for (var i = 0; i < list.length; i++) {
 		var values = list[i].trim().split("|");
 		var keyword = values[0];
@@ -67,6 +68,12 @@
 		if (keyword.includes("Bạn đã gửi")) {
 			continue;
 		}
+		// Kiểm tra xem từ khóa đã được mở hay chưa
+		if (openedKeywords.includes(keyword)) {
+			continue;
+		}
+		// Thêm từ khóa vào mảng và mở trang web tương ứng
+		openedKeywords.push(keyword);
 		var url = urlPattern + encodeURIComponent(keyword);
 		window.open(url, "_blank");
 		}
