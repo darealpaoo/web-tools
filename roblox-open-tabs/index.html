@@ -52,6 +52,20 @@
             button:hover {
                 background-color: #3e8e41;
             }
+            .redirect-link {
+                display: inline-block;
+                padding: 10px 20px;
+                font-size: 16px;
+                text-align: center;
+                text-decoration: none;
+                background-color: #4CAF50;
+                color: #fff;
+                border-radius: 5px;
+                transition: background-color 0.3s ease;
+            }
+            .redirect-link:hover {
+                background-color: #45a049;
+            }
         </style>
     </head>
     <body>
@@ -59,6 +73,8 @@
             <h1>Roblox Open Tabs</h1>
             <textarea id="list" placeholder="Điền danh sách phân cách bởi các dòng"></textarea>
             <button onclick="openTabs()">Open Tabs</button>
+			<br /><br />
+			<center><a href="https://darealpaoo.github.io/web-tools/robux-calculator/" target="_self" class="redirect-link">Robux Calculator Tool</a></center>
         </div>
         <script>
             function openTabs() {
