@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trình tạo sơ đồ PERT</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css" />
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
     <style>
       /* Kiểu dáng bổ sung */
       body {
@@ -53,13 +56,13 @@
         stroke-width: 1;
       }
       /* Node text styles */
-      /* INCREASED FONT SIZE HERE */
       .node text {
         font-size: 10px;
         font-weight: bold;
         text-anchor: middle;
-        dominant-baseline: central; /* Changed baseline */
+        dominant-baseline: central;
         pointer-events: none;
+        cursor: help; /* Add help cursor to text elements */
       }
       .node text.node-id {
         fill: #555;
@@ -85,10 +88,11 @@
         text-anchor: middle;
         fill: #333;
         pointer-events: none;
-        paint-order: stroke; /* Ensure stroke is drawn behind fill */
-        stroke: #f9f9f9; /* Match background color */
-        stroke-width: 3px; /* Adjust thickness for desired padding effect */
+        paint-order: stroke;
+        stroke: #f9f9f9;
+        stroke-width: 3px;
         stroke-linejoin: round;
+        cursor: help; /* Add help cursor to edge text */
       }
       /* Critical path styles */
       .edge.critical path {
@@ -99,7 +103,7 @@
         fill: orange;
         font-weight: bold;
         stroke: #f9f9f9;
-      } /* Keep background for critical text */
+      }
       .node.critical circle {
         stroke: orange;
         stroke-width: 2.5;
@@ -117,6 +121,18 @@
       /* Hide error message div initially */
       #errorMessage:empty {
         display: none;
+      }
+      /* Remove default title style, Tippy handles it */
+      /*
+      [title] {
+         cursor: help;
+         text-decoration: underline dotted;
+      }
+      */
+      /* Style for Tippy tooltips */
+      .tippy-box[data-theme~="light-border"] {
+        border: 1px solid #ccc;
+        white-space: pre-wrap; /* Allow line breaks in tooltips */
       }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -283,6 +299,7 @@
       let svgElement = null;
       let nodesMapRef = null;
       let edgesRef = null;
+      let tippyInstances = []; // To manage Tippy instances
 
       // --- Event Listeners ---
       addRowBtn.addEventListener("click", addRow);
@@ -292,6 +309,29 @@
       loadData2Btn.addEventListener("click", () => loadSampleData(sampleData2));
 
       // --- Functions ---
+
+      // --- Tippy Initialization ---
+      function initializeTippy() {
+        // Destroy previous instances if any
+        tippyInstances.forEach((instance) => instance.destroy());
+        tippyInstances = [];
+
+        // Initialize Tippy for table cells and SVG text elements
+        const newInstances = tippy("[data-tippy-content]", {
+          allowHTML: true, // Allow HTML in tooltips if needed later
+          theme: "light-border", // Use a theme with a border
+          placement: "top", // Default placement
+          delay: 0, // Show instantly
+          duration: [100, 100], // Fade in/out duration
+          interactive: false, // Tooltip is not interactive
+          appendTo: () => document.body, // Append to body to avoid SVG clipping issues
+        });
+        if (Array.isArray(newInstances)) {
+          tippyInstances = newInstances;
+        } else if (newInstances) {
+          tippyInstances.push(newInstances); // Handle single instance case
+        }
+      }
 
       // --- Data Loading ---
       function loadSampleData(data) {
@@ -309,6 +349,9 @@
           '<span class="text-gray-500">Kết quả chi tiết sẽ hiển thị ở đây.</span>';
         clearError();
         removeDragListeners();
+        // Destroy Tippy instances when loading new data
+        tippyInstances.forEach((instance) => instance.destroy());
+        tippyInstances = [];
       }
 
       // (Helper functions: handleTableActions, createTableRow, addRow, removeRow, insertRowAbove, displayError, clearError - No changes)
@@ -335,7 +378,7 @@
         } else {
           displayError("Không còn công việc nào để xóa.");
         }
-      } // Allow deleting last row
+      }
       function insertRowAbove(button) {
         const currentRow = button.closest("tr");
         const newRow = createTableRow();
@@ -358,12 +401,14 @@
         resultsTableContainer.innerHTML =
           '<span class="text-gray-500">Đang tính toán kết quả...</span>';
         removeDragListeners();
+        // Destroy previous Tippy instances before recalculating
+        tippyInstances.forEach((instance) => instance.destroy());
+        tippyInstances = [];
 
         try {
           const tasks = parseInputData();
           if (!tasks) return;
           if (tasks.length === 0) {
-            // Handle empty input table
             displayError("Vui lòng nhập ít nhất một công việc.");
             pertChartContainer.innerHTML =
               '<span class="text-gray-500">Chưa có dữ liệu để vẽ sơ đồ.</span>';
@@ -372,18 +417,19 @@
             return;
           }
 
-          // Use the General buildGraph function
           const { nodes, edges, startNodeId, endNodeId } = buildGraph(tasks);
-          if (!nodes || !edges) return; // Stop if graph building failed
+          if (!nodes || !edges) return;
 
-          // Perform standard PERT/CPM calculation
           calculatePert(nodes, edges, startNodeId, endNodeId);
 
-          nodesMapRef = nodes; // Store references for dragging
+          nodesMapRef = nodes;
           edgesRef = edges;
 
           drawPertChart(nodes, edges, startNodeId, endNodeId);
-          displayResultsTable(tasks, nodes); // Display calculated results
+          displayResultsTable(tasks, nodes);
+
+          // Initialize Tippy AFTER elements are rendered
+          initializeTippy();
         } catch (error) {
           console.error("Lỗi trong quá trình tính toán PERT/CPM:", error);
           displayError(
@@ -396,13 +442,13 @@
         }
       }
 
-      // --- Parse Input Data ---
+      // --- Parse Input Data (No changes needed here) ---
       function parseInputData() {
         const tasks = [];
         const taskIds = new Set();
         const rows = taskTableBody.querySelectorAll("tr");
         let hasError = false;
-        if (rows.length === 0) return []; // Return empty array if no rows
+        if (rows.length === 0) return [];
 
         rows.forEach((row, index) => {
           const idInput = row.querySelector(".task-id");
@@ -412,7 +458,7 @@
             console.error(`Missing input elements in row ${index + 1}`);
             hasError = true;
             return;
-          } // Skip row on error
+          }
           const id = idInput.value.trim().toUpperCase();
           const durationStr = durationInput.value;
           const dependenciesStr = dependenciesInput.value.trim().toUpperCase();
@@ -435,7 +481,7 @@
             hasError = true;
             return;
           }
-          const duration = parseFloat(durationStr); // Use parseFloat to allow decimal durations
+          const duration = parseFloat(durationStr);
           if (isNaN(duration) || duration < 0) {
             displayError(
               `Lỗi ở dòng ${
@@ -472,7 +518,6 @@
         });
 
         if (!hasError) {
-          // Perform dependency check only if no previous errors
           tasks.forEach((task, index) => {
             task.dependencies.forEach((depId) => {
               if (!taskIds.has(depId)) {
@@ -488,10 +533,10 @@
             });
           });
         }
-        return hasError ? null : tasks; // Return null if any error occurred
+        return hasError ? null : tasks;
       }
 
-      // --- General Graph Building Logic (Simplified AoA) ---
+      // --- General Graph Building Logic (No changes needed here) ---
       function buildGraph(tasks) {
         const nodes = new Map();
         const edges = [];
@@ -510,16 +555,18 @@
               outgoingEdges: [],
               layer: -1,
               gElement: null,
+              esCalculation: null,
+              lfCalculation: null,
+              slackCalculation: null,
             });
           }
           return nodes.get(id);
         }
 
-        const startNode = getNode(nextNodeId++); // Global start node (ID 0)
-        const taskEndNodes = new Map(); // Map<taskId, nodeId>
-        const mergeNodes = new Map(); // Map<stringified_sorted_dependency_task_ids, nodeId>
+        const startNode = getNode(nextNodeId++);
+        const taskEndNodes = new Map();
+        const mergeNodes = new Map();
 
-        // --- Pass 1: Determine potential start nodes and necessary merge points ---
         tasks.forEach((task) => {
           if (task.dependencies.length === 0) {
             task.startNodeId = startNode.id;
@@ -528,14 +575,12 @@
             if (mergeNodes.has(depKey)) {
               task.startNodeId = mergeNodes.get(depKey);
             } else {
-              // Check if all dependencies ALREADY have a COMMON known end node
               let commonEndNodeId = null;
               let firstDepEndNodeId = null;
               let allDepsHaveEndNode = true;
               for (const depId of task.dependencies) {
                 const knownEndNode = taskEndNodes.get(depId);
                 if (knownEndNode === undefined) {
-                  // Dependency end node not yet determined
                   allDepsHaveEndNode = false;
                   break;
                 }
@@ -543,30 +588,25 @@
                   firstDepEndNodeId = knownEndNode;
                   commonEndNodeId = knownEndNode;
                 } else if (knownEndNode !== commonEndNodeId) {
-                  commonEndNodeId = -1; // Indicate different end nodes
+                  commonEndNodeId = -1;
                   break;
                 }
               }
-
               if (
                 allDepsHaveEndNode &&
                 commonEndNodeId !== -1 &&
                 commonEndNodeId !== null
               ) {
-                // All dependencies already end at the same known node, reuse it
                 task.startNodeId = commonEndNodeId;
-                mergeNodes.set(depKey, commonEndNodeId); // Cache this merge point
+                mergeNodes.set(depKey, commonEndNodeId);
               } else {
-                // Create a new node for this task to start from
                 const newNode = getNode(nextNodeId++);
                 task.startNodeId = newNode.id;
                 mergeNodes.set(depKey, newNode.id);
-                // Try to assign this new node as the end node for dependencies
                 task.dependencies.forEach((depId) => {
                   if (!taskEndNodes.has(depId)) {
                     taskEndNodes.set(depId, newNode.id);
                   } else if (taskEndNodes.get(depId) !== newNode.id) {
-                    // Conflict: Dependency already ends elsewhere. Needs dummy in full AoA.
                     console.warn(
                       `Task ${task.id} starts at new node ${
                         newNode.id
@@ -574,7 +614,6 @@
                         depId
                       )}. Dummy task might be needed.`
                     );
-                    // Simple approach: Force dependency end here for this path (might be inaccurate)
                     taskEndNodes.set(depId, newNode.id);
                   }
                 });
@@ -583,7 +622,6 @@
           }
         });
 
-        // --- Pass 2: Assign final end nodes and create edges ---
         const tasksWithSuccessors = new Set();
         tasks.forEach((task) =>
           task.dependencies.forEach((depId) => tasksWithSuccessors.add(depId))
@@ -591,24 +629,24 @@
 
         tasks.forEach((task) => {
           if (!taskEndNodes.has(task.id)) {
-            // If end node wasn't set by a successor
             if (!tasksWithSuccessors.has(task.id)) {
-              // Task has no successors, create a unique potential end node for now
               task.endNodeId = getNode(nextNodeId++).id;
             } else {
-              // Task has successors, but they didn't define a common start point for it.
-              // Create a new intermediate node.
               task.endNodeId = getNode(nextNodeId++).id;
-              taskEndNodes.set(task.id, task.endNodeId); // Make this available for later tasks
+              taskEndNodes.set(task.id, task.endNodeId);
             }
           } else {
-            task.endNodeId = taskEndNodes.get(task.id); // Use the already assigned end node
+            task.endNodeId = taskEndNodes.get(task.id);
           }
-
-          // Finalize edge creation
           const startN = getNode(task.startNodeId);
           const endN = getNode(task.endNodeId);
           if (startN && endN) {
+            task.esCalculation = null;
+            task.efCalculation = null;
+            task.lsCalculation = null;
+            task.lfCalculation = null;
+            task.slackCalculation = null;
+            task.isDummy = false;
             startN.outgoingEdges.push(task);
             endN.incomingEdges.push(task);
             edges.push(task);
@@ -617,18 +655,17 @@
           }
         });
 
-        // --- Final End Node Processing ---
         let finalEndNode;
         const actualEndNodes = Array.from(nodes.values()).filter(
           (n) =>
             n.id !== startNode.id &&
             n.outgoingEdges.filter((e) => !e.isDummy).length === 0
-        ); // Exclude dummy edges when checking
+        );
 
         if (actualEndNodes.length === 1) {
           finalEndNode = actualEndNodes[0];
         } else if (actualEndNodes.length > 1) {
-          finalEndNode = getNode(nextNodeId++); // Create a single final node
+          finalEndNode = getNode(nextNodeId++);
           actualEndNodes.forEach((node) => {
             const dummyTask = {
               id: `dummy_end_${node.id}`,
@@ -647,20 +684,22 @@
               pathElement: null,
               textElement: null,
               textBgElement: null,
+              esCalculation: "Dummy Task",
+              efCalculation: "Dummy Task",
+              lsCalculation: "Dummy Task",
+              lfCalculation: "Dummy Task",
+              slackCalculation: "Dummy Task",
             };
             node.outgoingEdges.push(dummyTask);
             finalEndNode.incomingEdges.push(dummyTask);
             edges.push(dummyTask);
           });
         } else if (nodes.size > 1) {
-          // Only if there are nodes besides start
           console.warn(
             "Không tìm thấy nút kết thúc rõ ràng. Cần kiểm tra lại logic hoặc dữ liệu."
           );
-          // Fallback: Use the node with the highest ID as a tentative end node.
-          // This is less reliable than using max ES but avoids running calculatePert prematurely.
           const maxId = Math.max(...Array.from(nodes.keys()));
-          finalEndNode = nodes.get(maxId) || startNode; // Default to startNode if maxId node doesn't exist
+          finalEndNode = nodes.get(maxId) || startNode;
           if (finalEndNode === startNode) {
             throw new Error("Không thể xác định nút kết thúc.");
           }
@@ -669,10 +708,9 @@
             finalEndNode.id
           );
         } else {
-          finalEndNode = startNode; // Only start node exists
+          finalEndNode = startNode;
         }
 
-        // Cycle detection
         const visited = new Set();
         const recursionStack = new Set();
         function detectCycleUtil(nodeId) {
@@ -703,34 +741,53 @@
         };
       }
 
-      // --- Calculate PERT (Standard calculation) ---
+      // --- Calculate PERT (Standard calculation - No changes needed here) ---
       function calculatePert(nodes, edges, startNodeId, endNodeId) {
         console.log("Running standard PERT calculation...");
         const nodeList = Array.from(nodes.values());
 
-        nodeList.forEach((node) => (node.es = 0)); // Initialize ES
+        nodeList.forEach((node) => {
+          node.es = 0;
+          node.esCalculation = "Start Node = 0";
+          node.lf = Infinity;
+          node.lfCalculation = "Infinity (init)";
+          node.slackCalculation = null;
+        });
 
-        // Forward Pass
         const inDegree = new Map();
         nodeList.forEach((node) =>
           inDegree.set(node.id, node.incomingEdges.length)
         );
         const queue = nodeList.filter((node) => inDegree.get(node.id) === 0);
         const topologicalOrder = [];
-        let processedEdges = 0; // Counter for cycle detection during sort
+        let processedEdges = 0;
 
         while (queue.length > 0) {
           const uNode = queue.shift();
           topologicalOrder.push(uNode);
-
           uNode.outgoingEdges.forEach((edge) => {
             processedEdges++;
             const vNode = nodes.get(edge.endNodeId);
             if (vNode) {
               const potential_es = uNode.es + edge.duration;
-              vNode.es = Math.max(vNode.es, potential_es);
+              if (
+                !vNode.esCalculation ||
+                vNode.esCalculation === "Start Node = 0"
+              ) {
+                vNode.esCalculation = [];
+              }
+              if (Array.isArray(vNode.esCalculation)) {
+                vNode.esCalculation.push(
+                  `Max(..., Node ${uNode.id} ES + Edge ${edge.id} Dur) = Max(..., ${uNode.es} + ${edge.duration} = ${potential_es})`
+                );
+              }
+              if (potential_es > vNode.es) {
+                vNode.es = potential_es;
+              }
               edge.es = uNode.es;
               edge.ef = edge.es + edge.duration;
+              edge.esCalculation = `ES = Start Node (${edge.startNodeId}) ES = ${uNode.es}`;
+              edge.efCalculation = `EF = Edge ES + Duration = ${edge.es} + ${edge.duration} = ${edge.ef}`;
               inDegree.set(vNode.id, inDegree.get(vNode.id) - 1);
               if (inDegree.get(vNode.id) === 0) {
                 queue.push(vNode);
@@ -748,7 +805,6 @@
           );
         }
 
-        // Determine project duration
         const endNode = nodes.get(endNodeId);
         let projectDuration = 0;
         if (endNode) {
@@ -760,46 +816,84 @@
           );
         }
 
-        // Initialize LF and Backward Pass
-        nodeList.forEach((node) => (node.lf = projectDuration));
+        nodeList.forEach((node) => {
+          node.lf = projectDuration;
+          node.lfCalculation = `Project Duration = ${projectDuration}`;
+        });
         if (endNode) {
           endNode.lf = projectDuration;
+          endNode.lfCalculation = `End Node LF = Project Duration = ${projectDuration}`;
         }
 
         for (let i = topologicalOrder.length - 1; i >= 0; i--) {
           const uNode = topologicalOrder[i];
+          if (uNode.outgoingEdges.length > 0) {
+            uNode.lfCalculation = [];
+            uNode.outgoingEdges.forEach((outgoingEdge) => {
+              const nextNode = nodes.get(outgoingEdge.endNodeId);
+              if (nextNode) {
+                const potential_lf_for_u = nextNode.lf - outgoingEdge.duration;
+                uNode.lfCalculation.push(
+                  `Min(..., Node ${nextNode.id} LF - Edge ${outgoingEdge.id} Dur) = Min(..., ${nextNode.lf} - ${outgoingEdge.duration} = ${potential_lf_for_u})`
+                );
+              }
+            });
+          } else if (uNode.id !== endNodeId) {
+            uNode.lfCalculation = `Terminal Node LF = Project Duration = ${projectDuration}`;
+          }
           uNode.incomingEdges.forEach((edge) => {
             const vNode = nodes.get(edge.startNodeId);
             if (vNode) {
               const potential_lf = uNode.lf - edge.duration;
-              vNode.lf = Math.min(vNode.lf, potential_lf);
+              if (potential_lf < vNode.lf) {
+                vNode.lf = potential_lf;
+              }
               edge.lf = uNode.lf;
               edge.ls = edge.lf - edge.duration;
+              edge.lfCalculation = `LF = End Node (${edge.endNodeId}) LF = ${uNode.lf}`;
+              edge.lsCalculation = `LS = Edge LF - Duration = ${edge.lf} - ${edge.duration} = ${edge.ls}`;
             }
           });
         }
 
-        // Calculate Slack and Critical Path
         const tolerance = 0.001;
         edges.forEach((edge) => {
           const startNode = nodes.get(edge.startNodeId);
           const endNode = nodes.get(edge.endNodeId);
-          if (startNode && endNode) {
+          if (startNode && endNode && !edge.isDummy) {
             edge.slack = edge.ls - edge.es;
+            const roundedSlack = Math.round(edge.slack * 1000) / 1000;
+            edge.slackCalculation = `Slack = LS - ES = ${edge.ls} - ${edge.es} = ${roundedSlack}`;
+            const startNodeSlack =
+              Math.round((startNode.lf - startNode.es) * 1000) / 1000;
+            const endNodeSlack =
+              Math.round((endNode.lf - endNode.es) * 1000) / 1000;
             edge.isCritical =
-              Math.abs(edge.slack) < tolerance &&
-              Math.abs(startNode.lf - startNode.es) < tolerance &&
-              Math.abs(endNode.lf - endNode.es) < tolerance;
+              Math.abs(roundedSlack) < tolerance &&
+              Math.abs(startNodeSlack) < tolerance &&
+              Math.abs(endNodeSlack) < tolerance;
             if (edge.isCritical) edge.slack = 0;
           } else {
             edge.slack = NaN;
             edge.isCritical = false;
+            edge.slackCalculation = edge.isDummy
+              ? "Dummy Task"
+              : "Cannot calculate";
           }
         });
+
         nodeList.forEach((node) => {
           node.slack = node.lf - node.es;
-          node.isCritical = Math.abs(node.slack) < tolerance;
+          const roundedSlack = Math.round(node.slack * 1000) / 1000;
+          node.slackCalculation = `Node Slack = Node LF - Node ES = ${node.lf} - ${node.es} = ${roundedSlack}`;
+          node.isCritical = Math.abs(roundedSlack) < tolerance;
           if (node.isCritical) node.slack = 0;
+          if (Array.isArray(node.esCalculation)) {
+            node.esCalculation = node.esCalculation.join("; ");
+          }
+          if (Array.isArray(node.lfCalculation)) {
+            node.lfCalculation = node.lfCalculation.join("; ");
+          }
         });
         console.log("Standard PERT calculation complete.");
       }
@@ -817,19 +911,17 @@
 
         const nodes = Array.from(nodesMap.values());
 
-        // --- Layout Nodes (Simple Layered Approach) ---
+        // Layout Nodes (Simple Layered Approach - No changes needed)
         const layers = new Map();
         const nodeLayer = new Map();
         const sortedNodes = [...nodes].sort(
           (a, b) => a.es - b.es || a.id - b.id
-        ); // Sort by ES, then ID
+        );
         let maxLayer = 0;
         const esToLayer = new Map();
         let currentLayerIndex = 0;
-
-        // Assign layers based on ES values
         sortedNodes.forEach((node) => {
-          const esRounded = Math.round(node.es * 100) / 100; // Group by similar ES
+          const esRounded = Math.round(node.es * 100) / 100;
           if (!esToLayer.has(esRounded)) {
             esToLayer.set(esRounded, currentLayerIndex++);
           }
@@ -839,8 +931,6 @@
           layers.get(node.layer).push(node.id);
           nodeLayer.set(node.id, node.layer);
         });
-
-        // Calculate SVG dimensions based on layout
         let maxNodesInLayer = 0;
         layers.forEach(
           (layerNodes) =>
@@ -857,37 +947,35 @@
           `0 0 ${Math.max(totalWidth, 600)} ${Math.max(totalHeight, 500)}`
         );
         svgElement.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
-        // Calculate initial X, Y positions
         layers.forEach((nodeIdsInLayer, layerIndex) => {
           const layerNodeCount = nodeIdsInLayer.length;
           const layerHeight =
             layerNodeCount > 1 ? (layerNodeCount - 1) * V_SPACING : 0;
           const remainingHeight = totalHeight - PADDING * 2;
           const startY =
-            PADDING + Math.max(0, (remainingHeight - layerHeight) / 2); // Center vertically
-          const sortedNodeIds = nodeIdsInLayer.sort((a, b) => a - b); // Sort by ID for consistent vertical order
+            PADDING + Math.max(0, (remainingHeight - layerHeight) / 2);
+          const sortedNodeIds = nodeIdsInLayer.sort((a, b) => a - b);
           sortedNodeIds.forEach((nodeId, nodeIndex) => {
             const node = nodesMap.get(nodeId);
-            node.x = PADDING + node.layer * H_SPACING; // Use assigned layer for X
+            node.x = PADDING + node.layer * H_SPACING;
             node.y = startY + nodeIndex * V_SPACING;
           });
         });
 
-        // --- Draw Edges & Nodes ---
+        // Draw Edges & Nodes
         const edgeGroup = document.createElementNS(SVG_NS, "g");
         edgeGroup.setAttribute("class", "edges");
-        edges.forEach((edge) => drawEdge(edge, edgeGroup, nodesMap)); // Draw edges first
+        edges.forEach((edge) => drawEdge(edge, edgeGroup, nodesMap));
         svgElement.appendChild(edgeGroup);
         const nodeGroup = document.createElementNS(SVG_NS, "g");
         nodeGroup.setAttribute("class", "nodes");
         nodes.forEach((node) => {
           drawNode(node, nodeGroup);
           node.gElement = nodeGroup.lastChild;
-        }); // Draw nodes on top
+        });
         svgElement.appendChild(nodeGroup);
         pertChartContainer.appendChild(svgElement);
-        addDragListeners(); // Enable dragging after elements are in the DOM
+        addDragListeners();
       }
 
       // --- Helper to create marker (No changes) ---
@@ -906,7 +994,7 @@
         return marker;
       }
 
-      // --- Helper to draw node (Displays calculated values) ---
+      // --- Helper to draw node (UPDATED: Use data-tippy-content) ---
       function drawNode(node, parentGroup) {
         const nodeElement = document.createElementNS(SVG_NS, "g");
         nodeElement.setAttribute(
@@ -923,65 +1011,78 @@
         circle.setAttribute("r", NODE_RADIUS);
         nodeElement.appendChild(circle);
 
-        // --- MODIFICATION: Draw X instead of + ---
-        const r = NODE_RADIUS * 0.95; // Radius for lines
-        const lineOffset = r / Math.sqrt(2); // Offset for X endpoints
-
-        const line1 = document.createElementNS(SVG_NS, "line"); // Top-left to Bottom-right
+        const r = NODE_RADIUS * 0.95;
+        const lineOffset = r / Math.sqrt(2);
+        const line1 = document.createElementNS(SVG_NS, "line");
         line1.setAttribute("class", "divider");
         line1.setAttribute("x1", -lineOffset);
         line1.setAttribute("y1", -lineOffset);
         line1.setAttribute("x2", lineOffset);
         line1.setAttribute("y2", lineOffset);
         nodeElement.appendChild(line1);
-
-        const line2 = document.createElementNS(SVG_NS, "line"); // Top-right to Bottom-left
+        const line2 = document.createElementNS(SVG_NS, "line");
         line2.setAttribute("class", "divider");
         line2.setAttribute("x1", lineOffset);
         line2.setAttribute("y1", -lineOffset);
         line2.setAttribute("x2", -lineOffset);
         line2.setAttribute("y2", lineOffset);
         nodeElement.appendChild(line2);
-        // --- END MODIFICATION ---
 
-        // --- MODIFICATION: Adjusted text positioning ---
-        const textOffset = NODE_RADIUS * 0.5; // Slightly increased offset for better spacing with larger font
+        const textOffset = NODE_RADIUS * 0.5;
 
-        // Order: Top: ID, Left: ES, Right: LF, Bottom: Slack
+        // Use data-tippy-content instead of <title> element
         const nodeIdText = createTextElement(
           "node-id",
           0,
           -textOffset,
           node.id
-        ); // Top center
+        );
+        nodeIdText.setAttribute("data-tippy-content", `Node ID: ${node.id}`);
         nodeElement.appendChild(nodeIdText);
-        const esText = createTextElement("es-text", -textOffset, 0, node.es); // Middle left
+
+        const esText = createTextElement("es-text", -textOffset, 0, node.es);
+        esText.setAttribute(
+          "data-tippy-content",
+          `Node ES: ${node.es}<br>Calculation: ${node.esCalculation || "N/A"}`
+        );
         nodeElement.appendChild(esText);
-        const lfText = createTextElement("lf-text", textOffset, 0, node.lf); // Middle right
+
+        const lfText = createTextElement("lf-text", textOffset, 0, node.lf);
+        lfText.setAttribute(
+          "data-tippy-content",
+          `Node LF: ${node.lf}<br>Calculation: ${node.lfCalculation || "N/A"}`
+        );
         nodeElement.appendChild(lfText);
+
         const slackText = createTextElement(
           "slack-text",
           0,
           textOffset,
           node.slack
-        ); // Bottom center
+        );
+        slackText.setAttribute(
+          "data-tippy-content",
+          `Node Slack: ${node.slack}<br>Calculation: ${
+            node.slackCalculation || "N/A"
+          }`
+        );
         nodeElement.appendChild(slackText);
-        // --- END MODIFICATION ---
 
         parentGroup.appendChild(nodeElement);
       }
 
-      // --- Helper to create text element (No changes) ---
+      // --- Helper to create text element (REMOVED title parameter) ---
       function createTextElement(className, x, y, content) {
         const text = document.createElementNS(SVG_NS, "text");
         text.setAttribute("class", className);
         text.setAttribute("x", x);
         text.setAttribute("y", y);
         text.textContent = content;
+        // REMOVED title element creation
         return text;
       }
 
-      // --- Helper to draw/update edge (Added text background) ---
+      // --- Helper to draw/update edge (UPDATED: Use data-tippy-content) ---
       function drawEdge(edge, parentGroup, nodesMap) {
         const startNode = nodesMap.get(edge.startNodeId);
         const endNode = nodesMap.get(edge.endNodeId);
@@ -989,10 +1090,8 @@
         const { startX, startY, endX, endY, angle, midX, midY } =
           calculateEdgePoints(startNode, endNode);
         let edgeElement = edge.gElement;
-        let textBgElement = edge.textBgElement;
 
         if (!edgeElement) {
-          // Create elements if they don't exist
           edgeElement = document.createElementNS(SVG_NS, "g");
           edgeElement.setAttribute(
             "class",
@@ -1010,15 +1109,14 @@
           edgeElement.appendChild(path);
           edge.pathElement = path;
           if (!edge.isDummy) {
-            // textBgElement = document.createElementNS(SVG_NS, 'rect'); textBgElement.setAttribute('class', 'text-bg'); edgeElement.appendChild(textBgElement); edge.textBgElement = textBgElement; // Background rect removed for stroke approach
             const text = document.createElementNS(SVG_NS, "text");
             edgeElement.appendChild(text);
             edge.textElement = text;
+            // REMOVED title element creation
           }
           parentGroup.appendChild(edgeElement);
           edge.gElement = edgeElement;
         } else {
-          // Update existing elements
           edgeElement.setAttribute(
             "class",
             `edge ${edge.isCritical ? "critical" : ""} ${
@@ -1029,22 +1127,35 @@
             "marker-end",
             `url(#${edge.isCritical ? "arrowhead-critical" : "arrowhead"})`
           );
+          if (edge.isDummy)
+            edge.pathElement.setAttribute("stroke-dasharray", "5,5");
+          else edge.pathElement.removeAttribute("stroke-dasharray");
         }
 
         edge.pathElement.setAttribute(
           "d",
           `M ${startX},${startY} L ${endX},${endY}`
-        ); // Update path
+        );
 
         if (!edge.isDummy && edge.textElement) {
-          // Update text position and content
           const textOffset = -10;
           const textX = midX + textOffset * Math.sin((angle * Math.PI) / 180);
           const textY = midY - textOffset * Math.cos((angle * Math.PI) / 180);
           edge.textElement.setAttribute("x", textX);
           edge.textElement.setAttribute("y", textY);
-          edge.textElement.textContent = `${edge.id} (${edge.duration})`;
-          // Background rect update removed
+          edge.textElement.textContent = `${edge.id} (${edge.duration})`; // Set text content directly
+
+          // Set tooltip content using data-tippy-content
+          const tippyContent = `Task: ${edge.id}<br>Duration: ${
+            edge.duration
+          }<br>ES: ${edge.es} (${edge.esCalculation || "N/A"})<br>EF: ${
+            edge.ef
+          } (${edge.efCalculation || "N/A"})<br>LS: ${edge.ls} (${
+            edge.lsCalculation || "N/A"
+          })<br>LF: ${edge.lf} (${edge.lfCalculation || "N/A"})<br>Slack: ${
+            edge.slack
+          } (${edge.slackCalculation || "N/A"})`;
+          edge.textElement.setAttribute("data-tippy-content", tippyContent);
         }
       }
 
@@ -1059,16 +1170,18 @@
           endY = endNode.y;
         let angle = Math.atan2(dy, dx);
         if (dist > NODE_RADIUS * 2) {
-          const ratio = NODE_RADIUS / dist;
-          startX = startNode.x + dx * ratio;
-          startY = startNode.y + dy * ratio;
-          endX = endNode.x - dx * ratio;
-          endY = endNode.y - dy * ratio;
+          const startRatio = NODE_RADIUS / dist;
+          const endRatio = (dist - NODE_RADIUS) / dist;
+          startX = startNode.x + dx * startRatio;
+          startY = startNode.y + dy * startRatio;
+          endX = startNode.x + dx * endRatio;
+          endY = startNode.y + dy * endRatio;
         } else if (dist > 0) {
-          startX = startNode.x + dx * 0.4;
-          startY = startNode.y + dy * 0.4;
-          endX = endNode.x - dx * 0.4;
-          endY = endNode.y - dy * 0.4;
+          const overlapRatio = 0.4;
+          startX = startNode.x + dx * overlapRatio;
+          startY = startNode.y + dy * overlapRatio;
+          endX = endNode.x - dx * overlapRatio;
+          endY = endNode.y - dy * overlapRatio;
         }
         const midX = (startX + endX) / 2;
         const midY = (startY + endY) / 2;
@@ -1113,12 +1226,17 @@
         const CTM = svgElement.getScreenCTM();
         if (!CTM) return { x: 0, y: 0 };
         let clientX, clientY;
-        if (evt.touches) {
+        if (evt.touches && evt.touches.length > 0) {
           clientX = evt.touches[0].clientX;
           clientY = evt.touches[0].clientY;
-        } else {
+        } else if (evt.changedTouches && evt.changedTouches.length > 0) {
+          clientX = evt.changedTouches[0].clientX;
+          clientY = evt.changedTouches[0].clientY;
+        } else if (evt.clientX && evt.clientY) {
           clientX = evt.clientX;
           clientY = evt.clientY;
+        } else {
+          return { x: 0, y: 0 };
         }
         return { x: (clientX - CTM.e) / CTM.a, y: (clientY - CTM.f) / CTM.d };
       }
@@ -1140,11 +1258,18 @@
           selectedNodeElement.classList.add("dragging");
           svgElement.classList.add("grabbing");
           const startPos = getMousePosition(evt);
-          const transform = selectedNodeElement.transform.baseVal;
-          const currentTranslate =
-            transform.numberOfItems > 0
-              ? transform.getItem(0).matrix
-              : { e: 0, f: 0 };
+          const transformList = selectedNodeElement.transform.baseVal;
+          let currentTranslate = { e: 0, f: 0 };
+          if (transformList.numberOfItems > 0) {
+            const transformItem = transformList.getItem(0);
+            if (transformItem.type === SVGTransform.SVG_TRANSFORM_TRANSLATE) {
+              currentTranslate = transformItem.matrix;
+            }
+          } else {
+            const newTransform = svgElement.createSVGTransform();
+            newTransform.setTranslate(0, 0);
+            transformList.appendItem(newTransform);
+          }
           offset.x = currentTranslate.e - startPos.x;
           offset.y = currentTranslate.f - startPos.y;
         }
@@ -1155,10 +1280,14 @@
           const coord = getMousePosition(evt);
           const newX = coord.x + offset.x;
           const newY = coord.y + offset.y;
-          selectedNodeElement.setAttribute(
-            "transform",
-            `translate(${newX}, ${newY})`
-          );
+          const transformList = selectedNodeElement.transform.baseVal;
+          if (transformList.numberOfItems > 0) {
+            transformList.getItem(0).setTranslate(newX, newY);
+          } else {
+            const newTransform = svgElement.createSVGTransform();
+            newTransform.setTranslate(newX, newY);
+            transformList.appendItem(newTransform);
+          }
           const nodeId = parseInt(
             selectedNodeElement.getAttribute("data-node-id"),
             10
@@ -1195,10 +1324,10 @@
         );
       }
 
-      // --- Display Results Table (Displays calculated values) ---
+      // --- Display Results Table (UPDATED: Use data-tippy-content) ---
       function displayResultsTable(tasks, nodesMap) {
         resultsTableContainer.innerHTML = "";
-        const edgesToDisplay = edgesRef; // Use edgesRef which has calculated task times
+        const edgesToDisplay = edgesRef;
         if (!edgesToDisplay || edgesToDisplay.length === 0) {
           resultsTableContainer.innerHTML =
             '<span class="text-gray-500">Không có dữ liệu cạnh để hiển thị kết quả chi tiết.</span>';
@@ -1208,31 +1337,73 @@
         table.className =
           "w-full border-collapse border border-gray-300 text-sm md:text-base";
         const thead = table.createTHead();
+        // Remove title attributes from table headers
         thead.innerHTML = ` <tr class="bg-gray-200"> <th class="border border-gray-300 p-2">Công việc</th> <th class="border border-gray-300 p-2">Thời gian TH</th> <th class="border border-gray-300 p-2">ES (Task)</th> <th class="border border-gray-300 p-2">EF (Task)</th> <th class="border border-gray-300 p-2">LS (Task)</th> <th class="border border-gray-300 p-2">LF (Task)</th> <th class="border border-gray-300 p-2">Slack (Dự trữ)</th> <th class="border border-gray-300 p-2">Đường găng?</th> </tr> `;
         const tbody = table.createTBody();
-        edgesToDisplay
+
+        const sortedEdges = [...edgesToDisplay].sort((a, b) => {
+          const numA = parseInt(a.id.replace(/[^0-9]/g, ""), 10) || 0;
+          const numB = parseInt(b.id.replace(/[^0-9]/g, ""), 10) || 0;
+          if (numA !== numB) return numA - numB;
+          return a.id.localeCompare(b.id);
+        });
+
+        sortedEdges
           .filter((task) => !task.isDummy)
           .forEach((task) => {
             const row = tbody.insertRow();
-            row.innerHTML = ` <td class="border border-gray-300 p-2">${
-              task.id
-            }</td> <td class="border border-gray-300 p-2 text-center">${
-              task.duration
-            }</td> <td class="border border-gray-300 p-2 text-center">${
-              task.es
-            }</td> <td class="border border-gray-300 p-2 text-center">${
-              task.ef
-            }</td> <td class="border border-gray-300 p-2 text-center">${
-              task.ls
-            }</td> <td class="border border-gray-300 p-2 text-center">${
-              task.lf
-            }</td> <td class="border border-gray-300 p-2 text-center ${
-              task.isCritical ? "text-orange-600 font-bold" : ""
-            }">${
-              task.slack
-            }</td> <td class="border border-gray-300 p-2 text-center ${
-              task.isCritical ? "text-orange-600 font-bold" : ""
-            }">${task.isCritical ? "Có" : "Không"}</td> `;
+            // Helper to create cell with data-tippy-content
+            const createCell = (content, tippyContent = "") => {
+              const cell = document.createElement("td");
+              cell.className = "border border-gray-300 p-2 text-center";
+              cell.textContent = content;
+              // Use data-tippy-content instead of title
+              if (
+                tippyContent &&
+                tippyContent !== "N/A" &&
+                tippyContent !== "Dummy Task"
+              ) {
+                cell.setAttribute("data-tippy-content", tippyContent);
+                cell.style.cursor = "help"; // Add help cursor
+              }
+              return cell;
+            };
+
+            const createCriticalCell = (
+              content,
+              tippyContent = "",
+              isCritical
+            ) => {
+              const cell = createCell(content, tippyContent);
+              if (isCritical) {
+                cell.classList.add("text-orange-600", "font-bold");
+              }
+              return cell;
+            };
+
+            row.appendChild(createCell(task.id));
+            row.appendChild(createCell(task.duration));
+            row.appendChild(createCell(task.es, task.esCalculation || "N/A"));
+            row.appendChild(createCell(task.ef, task.efCalculation || "N/A"));
+            row.appendChild(createCell(task.ls, task.lsCalculation || "N/A"));
+            row.appendChild(createCell(task.lf, task.lfCalculation || "N/A"));
+            const displaySlack = isNaN(task.slack)
+              ? "N/A"
+              : Math.round(task.slack * 1000) / 1000;
+            row.appendChild(
+              createCriticalCell(
+                displaySlack,
+                task.slackCalculation || "N/A",
+                task.isCritical
+              )
+            );
+            row.appendChild(
+              createCriticalCell(
+                task.isCritical ? "Có" : "Không",
+                "",
+                task.isCritical
+              )
+            ); // No tooltip for critical path column
           });
         resultsTableContainer.appendChild(table);
       }
@@ -1240,6 +1411,7 @@
       // --- Initial Setup ---
       clearError(); // Hide error message initially
       loadSampleData(sampleData1); // Load sample data 1 by default
+      // initializeTippy(); // Initialize Tippy on initial load if needed, currently called after calculation
     </script>
   </body>
 </html>
