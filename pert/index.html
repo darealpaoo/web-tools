@@ -1,412 +1,605 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PERT Chart Generator</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình tạo sơ đồ PERT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        padding: 2rem;
-        background: #f0f2f5;
-        color: #333;
-        margin: 0;
-      }
+        /* Kiểu dáng bổ sung */
+        body {
+            font-family: 'Inter', sans-serif;
+            user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
+        }
+        input::placeholder { text-align: center; }
+        .action-button { @apply px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors duration-150; }
+        .load-button { @apply px-3 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded transition-colors duration-150 mr-2; }
+        #pertChart svg {
+            width: 100%; height: auto; min-height: 500px;
+            border: 1px solid #ccc; background-color: #f9f9f9; border-radius: 8px;
+            cursor: grab;
+        }
+        #pertChart svg.grabbing { cursor: grabbing; }
+        /* Node styles */
+        .node { cursor: grab; }
+        .node.dragging { cursor: grabbing; }
+        .node circle { stroke: #333; stroke-width: 1.5; fill: #fff; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.1)); }
+        .node line.divider { stroke: #aaa; stroke-width: 1; }
+        /* Node text styles */
+        .node text { font-size: 8px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+        .node text.node-id { fill: #555; }
+        .node text.es-text { fill: red; }
+        .node text.lf-text { fill: blue; }
+        .node text.slack-text { fill: purple; }
+        /* Edge styles */
+        .edge path { stroke: #666; stroke-width: 1.5; fill: none; }
+        /* Edge text background */
+        .edge text {
+            font-size: 10px; text-anchor: middle; fill: #333; pointer-events: none;
+            paint-order: stroke; /* Ensure stroke is drawn behind fill */
+            stroke: #f9f9f9; /* Match background color */
+            stroke-width: 3px; /* Adjust thickness for desired padding effect */
+            stroke-linejoin: round;
+        }
+        /* Critical path styles */
+        .edge.critical path { stroke: orange; stroke-width: 2.5; }
+        .edge.critical text { fill: orange; font-weight: bold; stroke: #f9f9f9;} /* Keep background for critical text */
+        .node.critical circle { stroke: orange; stroke-width: 2.5; }
+        .node.critical line.divider { stroke: orange; }
+        /* Markers */
+        marker#arrowhead { fill: #666; }
+        marker#arrowhead-critical { fill: orange; }
+        /* Hide error message div initially */
+        #errorMessage:empty { display: none; }
 
-      .container {
-        max-width: 1200px;
-        margin: 0 auto;
-      }
-
-      h1 {
-        color: #1a73e8;
-        margin-bottom: 1.5rem;
-        font-size: 2rem;
-      }
-
-      .controls {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        margin-bottom: 2rem;
-      }
-
-      label {
-        display: block;
-        margin-top: 1rem;
-        font-weight: 500;
-        color: #555;
-      }
-
-      input,
-      textarea {
-        width: 100%;
-        padding: 0.75rem;
-        margin-top: 0.5rem;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 1rem;
-        box-sizing: border-box;
-        transition: border-color 0.2s;
-      }
-
-      input:focus,
-      textarea:focus {
-        outline: none;
-        border-color: #1a73e8;
-        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
-      }
-
-      textarea {
-        min-height: 200px;
-        resize: vertical;
-      }
-
-      button {
-        background: #1a73e8;
-        color: white;
-        border: none;
-        padding: 0.75rem 1.5rem;
-        margin-top: 1rem;
-        border-radius: 4px;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-
-      button:hover {
-        background: #1557b0;
-      }
-
-      一座 #results {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        margin-bottom: 2rem;
-      }
-
-      #results h3 {
-        color: #1a73e8;
-        margin-top: 0;
-      }
-
-      #results ul {
-        padding-left: 1.5rem;
-        margin: 1rem 0;
-      }
-
-      #results p {
-        margin: 0.5rem 0;
-      }
-
-      #results strong {
-        color: #1557b0;
-      }
-
-      svg {
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        background: white;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        width: 100%;
-        height: 600px;
-      }
-
-      .node {
-        cursor: move;
-      }
-
-      marker {
-        fill: #666;
-      }
     </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="controls">
-        <label for="nodeCount">Số node:</label>
-        <input type="number" id="nodeCount" min="2" value="5" />
-        <button onclick="generateRandomData()">Random dữ liệu</button>
-        <label for="dataInput">Nhập dữ liệu dạng JSON:</label>
-        <textarea id="dataInput" rows="10">
-[
-  ["A", 1, 2, 2],
-  ["B", 2, 3, 2],
-  ["C", 2, 4, 3],
-  ["D", 2, 5, 4],
-  ["E", 3, 6, 2],
-  ["F", 4, 6, 3],
-  ["G", 5, 7, 6],
-  ["H", 6, 8, 2],
-  ["I", 6, 7, 5],
-  ["J", 7, 8, 1],
-  ["K", 8, 9, 2]
-]</textarea
-        >
-        <button onclick="renderGraph()">Submit</button>
-      </div>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+    <div class="container mx-auto max-w-6xl bg-white p-6 rounded-lg shadow-lg">
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-800 mb-6">Trình tạo sơ đồ PERT (Chuyển đổi từ R)</h1>
 
-      <div id="results"></div>
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-3 text-gray-700">Nhập thông tin công việc</h2>
+             <div class="mb-3">
+                <button id="loadData1Btn" class="load-button">Tải Dữ liệu Mẫu 1 (CPM)</button>
+                <button id="loadData2Btn" class="load-button">Tải Dữ liệu Mẫu 2 (CPM)</button>
+            </div>
+            <div class="overflow-x-auto">
+                 <table id="taskTable" class="w-full border-collapse border border-gray-300 text-sm md:text-base">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="border border-gray-300 p-2 w-1/12"></th>
+                            <th class="border border-gray-300 p-2 w-2/12">Công việc (ID)</th>
+                            <th class="border border-gray-300 p-2 w-2/12">Thời gian TH</th>
+                            <th class="border border-gray-300 p-2 w-6/12">Công việc trước (vd: X1,X2)</th>
+                            <th class="border border-gray-300 p-2 w-1/12"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+            <button id="addRowBtn" class="mt-3 mr-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors duration-150">➕ Thêm công việc</button>
+            <button id="calculateBtn" class="mt-3 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors duration-150">📊 Tính toán & Vẽ sơ đồ</button>
+             <div id="errorMessage" class="mt-4 text-red-600 font-semibold hidden"></div>
+        </div>
 
-      <svg id="graph" width="1000" height="600">
-        <defs>
-          <marker
-            id="arrow"
-            viewBox="0 -5 10 10"
-            refX="15"
-            refY="0"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto"
-          >
-            <path d="M0,-5L10,0L0,5" />
-          </marker>
-        </defs>
-      </svg>
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-3 text-gray-700">Sơ đồ PERT/CPM (Kéo thả các nút để điều chỉnh)</h2>
+            <div id="pertChart" class="bg-gray-50 p-4 rounded border border-gray-300 min-h-[500px] flex items-center justify-center overflow-hidden">
+                <span class="text-gray-500">Sơ đồ sẽ được hiển thị ở đây sau khi tính toán.</span>
+            </div>
+             <div class="mt-4 text-sm text-gray-600">
+                 <p><span class="font-bold text-red-600">ES (Góc trái):</span> Thời gian sớm nhất sự kiện có thể xảy ra.</p>
+                 <p><span class="font-bold text-blue-600">LF (Góc phải):</span> Thời gian muộn nhất sự kiện phải xảy ra.</p>
+                 <p><span class="font-bold text-purple-600">Slack (Góc dưới):</span> Thời gian dự trữ của sự kiện (LF - ES).</p>
+                 <p><span class="font-bold text-gray-700">ID (Góc trên):</span> Mã định danh của sự kiện.</p>
+                 <p><span class="font-bold text-orange-600">Đường găng:</span> Các công việc và sự kiện có Slack = 0.</p>
+            </div>
+        </div>
+
+         <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-3 text-gray-700">Kết quả tính toán chi tiết (CPM)</h2>
+             <div id="resultsTableContainer" class="overflow-x-auto">
+                 <span class="text-gray-500">Kết quả chi tiết sẽ hiển thị ở đây.</span>
+             </div>
+        </div>
+
     </div>
 
     <script>
-      function generateRandomData() {
-        const nodeCount = parseInt(document.getElementById("nodeCount").value);
-        if (isNaN(nodeCount) || nodeCount < 2) {
-          alert("Vui lòng nhập số node hợp lệ (tối thiểu 2)");
-          return;
+        // --- DOM Elements ---
+        const taskTableBody = document.querySelector('#taskTable tbody');
+        const addRowBtn = document.getElementById('addRowBtn');
+        const calculateBtn = document.getElementById('calculateBtn');
+        const pertChartContainer = document.getElementById('pertChart');
+        const resultsTableContainer = document.getElementById('resultsTableContainer');
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const loadData1Btn = document.getElementById('loadData1Btn');
+        const loadData2Btn = document.getElementById('loadData2Btn');
+
+        // --- Constants ---
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const NODE_RADIUS = 30;
+        const H_SPACING = 150;
+        const V_SPACING = 100;
+        const PADDING = 50;
+
+        // --- Sample Data (CPM format) ---
+        const sampleData1 = [
+            { id: "X1", duration: 3, dependencies: "" }, { id: "X2", duration: 3, dependencies: "" },
+            { id: "X3", duration: 5, dependencies: "" }, { id: "X4", duration: 3, dependencies: "X3" },
+            { id: "X5", duration: 4, dependencies: "X1" }, { id: "X6", duration: 5, dependencies: "X1" },
+            { id: "X7", duration: 3, dependencies: "X2,X4" }, { id: "X8", duration: 4, dependencies: "X6" },
+            { id: "X9", duration: 4, dependencies: "X5,X7" }, { id: "X10", duration: 5, dependencies: "X8,X9" },
+            { id: "X11", duration: 4, dependencies: "X10" }
+        ];
+        const sampleData2 = [
+            { id: "X1", duration: 3, dependencies: "" }, { id: "X2", duration: 3, dependencies: "" },
+            { id: "X3", duration: 4, dependencies: "" }, { id: "X4", duration: 3, dependencies: "X2" },
+            { id: "X5", duration: 4, dependencies: "X1" }, { id: "X6", duration: 5, dependencies: "X1" },
+            { id: "X7", duration: 3, dependencies: "X4" }, { id: "X8", duration: 4, dependencies: "X6" },
+            { id: "X9", duration: 5, dependencies: "X3,X7" }, { id: "X10", duration: 5, dependencies: "X5,X8,X9" }
+        ];
+
+        // --- Global State for Dragging ---
+        let isDragging = false; let selectedNodeElement = null; let offset = { x: 0, y: 0 };
+        let svgElement = null; let nodesMapRef = null; let edgesRef = null;
+
+        // --- Event Listeners ---
+        addRowBtn.addEventListener('click', addRow);
+        calculateBtn.addEventListener('click', handleCalculation);
+        taskTableBody.addEventListener('click', handleTableActions);
+        loadData1Btn.addEventListener('click', () => loadSampleData(sampleData1));
+        loadData2Btn.addEventListener('click', () => loadSampleData(sampleData2));
+
+        // --- Functions ---
+
+        // --- Data Loading ---
+        function loadSampleData(data) {
+            taskTableBody.innerHTML = ''; // Clear existing rows
+            data.forEach(task => {
+                const newRow = createTableRow();
+                newRow.querySelector('.task-id').value = task.id;
+                newRow.querySelector('.duration').value = task.duration;
+                newRow.querySelector('.dependencies').value = task.dependencies;
+                taskTableBody.appendChild(newRow);
+            });
+            pertChartContainer.innerHTML = '<span class="text-gray-500">Sơ đồ sẽ được hiển thị ở đây sau khi tính toán.</span>';
+            resultsTableContainer.innerHTML = '<span class="text-gray-500">Kết quả chi tiết sẽ hiển thị ở đây.</span>';
+            clearError(); removeDragListeners();
         }
 
-        const data = [];
-        const usedConnections = new Set();
+        // (Helper functions: handleTableActions, createTableRow, addRow, removeRow, insertRowAbove, displayError, clearError - No changes)
+        function handleTableActions(event) { if (event.target.classList.contains('remove-row')) { removeRow(event.target); } else if (event.target.classList.contains('insert-row')) { insertRowAbove(event.target); } }
+        function createTableRow() { const newRow = document.createElement('tr'); newRow.innerHTML = ` <td class="border border-gray-300 p-1 text-center"><button class="action-button insert-row" title="Chèn dòng vào trên">⬆️</button></td> <td class="border border-gray-300 p-1"><input type="text" class="w-full p-1 border rounded text-center task-id" placeholder="Tên CV"></td> <td class="border border-gray-300 p-1"><input type="number" min="0" class="w-full p-1 border rounded text-center duration" placeholder="TG"></td> <td class="border border-gray-300 p-1"><input type="text" class="w-full p-1 border rounded text-center dependencies" placeholder="CV trước"></td> <td class="border border-gray-300 p-1 text-center"><button class="action-button remove-row" title="Xóa dòng">🗑️</button></td> `; return newRow; }
+        function addRow() { const newRow = createTableRow(); taskTableBody.appendChild(newRow); }
+        function removeRow(button) { const row = button.closest('tr'); if (taskTableBody.rows.length > 0) { row.remove(); } else { displayError("Không còn công việc nào để xóa."); } } // Allow deleting last row
+        function insertRowAbove(button) { const currentRow = button.closest('tr'); const newRow = createTableRow(); taskTableBody.insertBefore(newRow, currentRow); }
+        function displayError(message) { errorMessageDiv.textContent = message; errorMessageDiv.classList.remove('hidden'); }
+        function clearError() { errorMessageDiv.textContent = ''; errorMessageDiv.classList.add('hidden'); }
 
-        for (let i = 1; i < nodeCount; i++) {
-          const duration = Math.floor(Math.random() * 5) + 1;
-          const label = String.fromCharCode(65 + data.length);
-          data.push([label, i, i + 1, duration]);
-          usedConnections.add(`${i}-${i + 1}`);
+
+        // --- Main Calculation Handler ---
+        function handleCalculation() {
+            clearError();
+            pertChartContainer.innerHTML = '<span class="text-gray-500">Đang tính toán và vẽ sơ đồ...</span>';
+            resultsTableContainer.innerHTML = '<span class="text-gray-500">Đang tính toán kết quả...</span>';
+            removeDragListeners();
+
+            try {
+                const tasks = parseInputData();
+                if (!tasks) return;
+                if (tasks.length === 0) { // Handle empty input table
+                     displayError("Vui lòng nhập ít nhất một công việc.");
+                     pertChartContainer.innerHTML = '<span class="text-gray-500">Chưa có dữ liệu để vẽ sơ đồ.</span>';
+                     resultsTableContainer.innerHTML = '<span class="text-gray-500">Chưa có dữ liệu để tính toán.</span>';
+                     return;
+                }
+
+                // Use the General buildGraph function
+                const { nodes, edges, startNodeId, endNodeId } = buildGraph(tasks);
+                if (!nodes || !edges) return; // Stop if graph building failed
+
+                // Perform standard PERT/CPM calculation
+                calculatePert(nodes, edges, startNodeId, endNodeId);
+
+                nodesMapRef = nodes; // Store references for dragging
+                edgesRef = edges;
+
+                drawPertChart(nodes, edges, startNodeId, endNodeId);
+                displayResultsTable(tasks, nodes); // Display calculated results
+
+            } catch (error) {
+                console.error("Lỗi trong quá trình tính toán PERT/CPM:", error);
+                displayError(`Đã xảy ra lỗi: ${error.message}. Vui lòng kiểm tra lại dữ liệu nhập hoặc cấu trúc phụ thuộc.`);
+                pertChartContainer.innerHTML = '<span class="text-red-500">Không thể tạo sơ đồ do lỗi.</span>';
+                resultsTableContainer.innerHTML = '<span class="text-red-500">Không thể hiển thị kết quả do lỗi.</span>';
+            }
         }
 
-        const extraEdges = Math.floor(nodeCount * 1.5);
-        for (let i = 0; i < extraEdges; i++) {
-          const from = Math.floor(Math.random() * (nodeCount - 1)) + 1;
-          const to = Math.floor(Math.random() * (nodeCount - from)) + from + 1;
-          const connection = `${from}-${to}`;
+        // --- Parse Input Data ---
+        function parseInputData() {
+            const tasks = []; const taskIds = new Set(); const rows = taskTableBody.querySelectorAll('tr'); let hasError = false;
+            if (rows.length === 0) return []; // Return empty array if no rows
 
-          if (
-            !usedConnections.has(connection) &&
-            from !== to &&
-            to <= nodeCount
-          ) {
-            const duration = Math.floor(Math.random() * 5) + 1;
-            const label = String.fromCharCode(65 + data.length);
-            data.push([label, from, to, duration]);
-            usedConnections.add(connection);
-          }
+            rows.forEach((row, index) => {
+                const idInput = row.querySelector('.task-id'); const durationInput = row.querySelector('.duration'); const dependenciesInput = row.querySelector('.dependencies');
+                if (!idInput || !durationInput || !dependenciesInput) { console.error(`Missing input elements in row ${index + 1}`); hasError = true; return; } // Skip row on error
+                const id = idInput.value.trim().toUpperCase(); const durationStr = durationInput.value; const dependenciesStr = dependenciesInput.value.trim().toUpperCase();
+
+                if (!id) { displayError(`Lỗi ở dòng ${index + 1}: Tên công việc (ID) không được để trống.`); idInput.focus(); hasError = true; return; }
+                if (taskIds.has(id)) { displayError(`Lỗi ở dòng ${index + 1}: Tên công việc (ID) "${id}" bị trùng lặp.`); idInput.focus(); hasError = true; return; }
+                const duration = parseFloat(durationStr); // Use parseFloat to allow decimal durations
+                if (isNaN(duration) || duration < 0) { displayError(`Lỗi ở dòng ${index + 1}: Thời gian thực hiện của công việc "${id}" không hợp lệ (phải là số không âm).`); durationInput.focus(); hasError = true; return; }
+                taskIds.add(id);
+                const dependencies = dependenciesStr === '' || dependenciesStr.toLowerCase() === 'ngay từ đầu' || dependenciesStr === '-' ? [] : dependenciesStr.split(',').map(dep => dep.trim().toUpperCase()).filter(dep => dep !== '');
+                tasks.push({ id, duration, dependencies, es: 0, ef: 0, ls: 0, lf: 0, slack: 0, isCritical: false, startNodeId: null, endNodeId: null });
+            });
+
+            if (!hasError) { // Perform dependency check only if no previous errors
+                tasks.forEach((task, index) => {
+                    task.dependencies.forEach(depId => {
+                        if (!taskIds.has(depId)) {
+                            const row = taskTableBody.querySelectorAll('tr')[index]; displayError(`Lỗi ở dòng ${index + 1}: Công việc "${task.id}" phụ thuộc vào công việc không tồn tại "${depId}".`); if (row) row.querySelector('.dependencies')?.focus(); hasError = true;
+                        }
+                    });
+                });
+            }
+            return hasError ? null : tasks; // Return null if any error occurred
         }
 
-        const lastNode = nodeCount;
-        if (!data.some(([_, from, to]) => to === lastNode)) {
-          const from = Math.floor(Math.random() * (nodeCount - 1)) + 1;
-          const duration = Math.floor(Math.random() * 5) + 1;
-          const label = String.fromCharCode(65 + data.length);
-          data.push([label, from, lastNode, duration]);
+
+        // --- General Graph Building Logic (Simplified AoA) ---
+        function buildGraph(tasks) {
+            const nodes = new Map(); const edges = []; const taskMap = new Map(tasks.map(task => [task.id, task]));
+            let nextNodeId = 0;
+
+            function getNode(id) {
+                if (!nodes.has(id)) { nodes.set(id, { id: id, es: 0, lf: Infinity, x: 0, y: 0, incomingEdges: [], outgoingEdges: [], layer: -1, gElement: null }); }
+                return nodes.get(id);
+            }
+
+            const startNode = getNode(nextNodeId++); // Global start node (ID 0)
+            const taskEndNodes = new Map(); // Map<taskId, nodeId>
+            const mergeNodes = new Map(); // Map<stringified_sorted_dependency_task_ids, nodeId>
+
+            // --- Pass 1: Determine potential start nodes and necessary merge points ---
+            tasks.forEach(task => {
+                if (task.dependencies.length === 0) {
+                    task.startNodeId = startNode.id;
+                } else {
+                    const depKey = JSON.stringify([...task.dependencies].sort());
+                    if (mergeNodes.has(depKey)) {
+                        task.startNodeId = mergeNodes.get(depKey);
+                    } else {
+                        // Check if all dependencies ALREADY have a COMMON known end node
+                        let commonEndNodeId = null;
+                        let firstDepEndNodeId = null;
+                        let allDepsHaveEndNode = true;
+                        for(const depId of task.dependencies) {
+                             const knownEndNode = taskEndNodes.get(depId);
+                             if (knownEndNode === undefined) { // Dependency end node not yet determined
+                                 allDepsHaveEndNode = false;
+                                 break;
+                             }
+                             if (firstDepEndNodeId === null) {
+                                 firstDepEndNodeId = knownEndNode;
+                                 commonEndNodeId = knownEndNode;
+                             } else if (knownEndNode !== commonEndNodeId) {
+                                 commonEndNodeId = -1; // Indicate different end nodes
+                                 break;
+                             }
+                        }
+
+                        if (allDepsHaveEndNode && commonEndNodeId !== -1 && commonEndNodeId !== null) {
+                             // All dependencies already end at the same known node, reuse it
+                             task.startNodeId = commonEndNodeId;
+                             mergeNodes.set(depKey, commonEndNodeId); // Cache this merge point
+                        } else {
+                             // Create a new node for this task to start from
+                             const newNode = getNode(nextNodeId++);
+                             task.startNodeId = newNode.id;
+                             mergeNodes.set(depKey, newNode.id);
+                             // Try to assign this new node as the end node for dependencies
+                             task.dependencies.forEach(depId => {
+                                 if (!taskEndNodes.has(depId)) {
+                                     taskEndNodes.set(depId, newNode.id);
+                                 } else if (taskEndNodes.get(depId) !== newNode.id) {
+                                     // Conflict: Dependency already ends elsewhere. Needs dummy in full AoA.
+                                     console.warn(`Task ${task.id} starts at new node ${newNode.id}, but dependency ${depId} already ends at ${taskEndNodes.get(depId)}. Dummy task might be needed.`);
+                                     // Simple approach: Force dependency end here for this path (might be inaccurate)
+                                     taskEndNodes.set(depId, newNode.id);
+                                 }
+                             });
+                        }
+                    }
+                }
+            });
+
+            // --- Pass 2: Assign final end nodes and create edges ---
+            const tasksWithSuccessors = new Set();
+            tasks.forEach(task => task.dependencies.forEach(depId => tasksWithSuccessors.add(depId)));
+
+            tasks.forEach(task => {
+                if (!taskEndNodes.has(task.id)) { // If end node wasn't set by a successor
+                    if (!tasksWithSuccessors.has(task.id)) {
+                        // Task has no successors, create a unique potential end node for now
+                         task.endNodeId = getNode(nextNodeId++).id;
+                    } else {
+                        // Task has successors, but they didn't define a common start point for it.
+                        // Create a new intermediate node.
+                        task.endNodeId = getNode(nextNodeId++).id;
+                        taskEndNodes.set(task.id, task.endNodeId); // Make this available for later tasks
+                    }
+                } else {
+                    task.endNodeId = taskEndNodes.get(task.id); // Use the already assigned end node
+                }
+
+                // Finalize edge creation
+                const startN = getNode(task.startNodeId);
+                const endN = getNode(task.endNodeId);
+                if (startN && endN) {
+                    startN.outgoingEdges.push(task);
+                    endN.incomingEdges.push(task);
+                    edges.push(task);
+                } else { throw new Error(`Lỗi tạo đồ thị cho công việc ${task.id}.`); }
+            });
+
+             // --- Final End Node Processing ---
+             let finalEndNode;
+             const actualEndNodes = Array.from(nodes.values()).filter(n => n.id !== startNode.id && n.outgoingEdges.filter(e => !e.isDummy).length === 0); // Exclude dummy edges when checking
+
+             if (actualEndNodes.length === 1) {
+                 finalEndNode = actualEndNodes[0];
+             } else if (actualEndNodes.length > 1) {
+                 finalEndNode = getNode(nextNodeId++); // Create a single final node
+                 actualEndNodes.forEach(node => {
+                     const dummyTask = { id: `dummy_end_${node.id}`, duration: 0, dependencies: [], startNodeId: node.id, endNodeId: finalEndNode.id, es: 0, ef: 0, ls: 0, lf: 0, slack: 0, isCritical: false, isDummy: true, gElement: null, pathElement: null, textElement: null, textBgElement: null };
+                     node.outgoingEdges.push(dummyTask); finalEndNode.incomingEdges.push(dummyTask); edges.push(dummyTask);
+                 });
+             } else if (nodes.size > 1) { // Only if there are nodes besides start
+                 console.warn("Không tìm thấy nút kết thúc rõ ràng. Cần kiểm tra lại logic hoặc dữ liệu.");
+                 // Fallback: Use the node with the highest ID as a tentative end node.
+                 // This is less reliable than using max ES but avoids running calculatePert prematurely.
+                 const maxId = Math.max(...Array.from(nodes.keys()));
+                 finalEndNode = nodes.get(maxId) || startNode; // Default to startNode if maxId node doesn't exist
+                 if (finalEndNode === startNode) {
+                      throw new Error("Không thể xác định nút kết thúc.");
+                 }
+                 console.warn("Sử dụng nút có ID cao nhất làm nút kết thúc tạm thời:", finalEndNode.id);
+
+             } else {
+                 finalEndNode = startNode; // Only start node exists
+             }
+
+
+            // Cycle detection
+            const visited = new Set(); const recursionStack = new Set();
+            function detectCycleUtil(nodeId) { const node = nodes.get(nodeId); if (!node) return false; visited.add(nodeId); recursionStack.add(nodeId); for (const edge of node.outgoingEdges) { const neighborNodeId = edge.endNodeId; if (!visited.has(neighborNodeId)) { if (detectCycleUtil(neighborNodeId)) return true; } else if (recursionStack.has(neighborNodeId)) { return true; } } recursionStack.delete(nodeId); return false; }
+            if (nodes.size > 0 && detectCycleUtil(startNode.id)) { throw new Error("Đồ thị công việc chứa vòng lặp."); }
+
+            return { nodes, edges, startNodeId: startNode.id, endNodeId: finalEndNode.id };
         }
 
-        document.getElementById("dataInput").value = JSON.stringify(
-          data,
-          null,
-          2
-        );
-      }
 
-      function renderGraph() {
-        const rawInput = document.getElementById("dataInput").value;
-        let data;
-        try {
-          data = JSON.parse(rawInput);
-        } catch (e) {
-          alert("Lỗi cú pháp JSON");
-          return;
+        // --- Calculate PERT (Standard calculation) ---
+        function calculatePert(nodes, edges, startNodeId, endNodeId) {
+            console.log("Running standard PERT calculation...");
+            const nodeList = Array.from(nodes.values());
+
+            nodeList.forEach(node => node.es = 0); // Initialize ES
+
+            // Forward Pass
+            const inDegree = new Map(); nodeList.forEach(node => inDegree.set(node.id, node.incomingEdges.length));
+            const queue = nodeList.filter(node => inDegree.get(node.id) === 0);
+            const topologicalOrder = [];
+            let processedEdges = 0; // Counter for cycle detection during sort
+
+            while (queue.length > 0) {
+                const uNode = queue.shift();
+                topologicalOrder.push(uNode);
+
+                uNode.outgoingEdges.forEach(edge => {
+                    processedEdges++;
+                    const vNode = nodes.get(edge.endNodeId);
+                    if (vNode) {
+                        const potential_es = uNode.es + edge.duration;
+                        vNode.es = Math.max(vNode.es, potential_es);
+                        edge.es = uNode.es; edge.ef = edge.es + edge.duration;
+                        inDegree.set(vNode.id, inDegree.get(vNode.id) - 1);
+                        if (inDegree.get(vNode.id) === 0) { queue.push(vNode); }
+                    }
+                });
+            }
+
+            if (topologicalOrder.length !== nodes.size) {
+                console.error("Topological sort failed. Graph likely contains a cycle.");
+                throw new Error("Đồ thị chứa vòng lặp, không thể thực hiện tính toán PERT.");
+            }
+
+            // Determine project duration
+            const endNode = nodes.get(endNodeId);
+            let projectDuration = 0;
+            if (endNode) { projectDuration = endNode.es; }
+            else { projectDuration = Math.max(0, ...nodeList.map(n => n.es)); console.warn(`End node ${endNodeId} not found/reachable. Using max ES ${projectDuration}.`); }
+
+
+            // Initialize LF and Backward Pass
+            nodeList.forEach(node => node.lf = projectDuration);
+            if (endNode) { endNode.lf = projectDuration; }
+
+            for (let i = topologicalOrder.length - 1; i >= 0; i--) {
+                const uNode = topologicalOrder[i];
+                uNode.incomingEdges.forEach(edge => {
+                    const vNode = nodes.get(edge.startNodeId);
+                    if (vNode) {
+                        const potential_lf = uNode.lf - edge.duration;
+                        vNode.lf = Math.min(vNode.lf, potential_lf);
+                        edge.lf = uNode.lf; edge.ls = edge.lf - edge.duration;
+                    }
+                });
+            }
+
+            // Calculate Slack and Critical Path
+            const tolerance = 0.001;
+            edges.forEach(edge => {
+                const startNode = nodes.get(edge.startNodeId); const endNode = nodes.get(edge.endNodeId);
+                if (startNode && endNode) {
+                    edge.slack = edge.ls - edge.es;
+                    edge.isCritical = Math.abs(edge.slack) < tolerance && Math.abs(startNode.lf - startNode.es) < tolerance && Math.abs(endNode.lf - endNode.es) < tolerance;
+                    if(edge.isCritical) edge.slack = 0;
+                } else { edge.slack = NaN; edge.isCritical = false; }
+            });
+            nodeList.forEach(node => {
+                node.slack = node.lf - node.es; node.isCritical = Math.abs(node.slack) < tolerance;
+                if(node.isCritical) node.slack = 0;
+            });
+            console.log("Standard PERT calculation complete.");
         }
 
-        const nodes = new Map();
-        const links = [];
 
-        data.forEach(([label, from, to, duration]) => {
-          if (!nodes.has(from)) nodes.set(from, { id: from });
-          if (!nodes.has(to)) nodes.set(to, { id: to });
-          links.push({ source: from, target: to, label, duration });
-        });
+        // --- Draw PERT Chart ---
+        function drawPertChart(nodesMap, edges, startNodeId, endNodeId) {
+            pertChartContainer.innerHTML = ''; // Clear previous chart
+            svgElement = document.createElementNS(SVG_NS, 'svg');
+            const defs = document.createElementNS(SVG_NS, 'defs');
+            const marker = createMarker('arrowhead', '#666');
+            const markerCritical = createMarker('arrowhead-critical', 'orange');
+            defs.appendChild(marker); defs.appendChild(markerCritical); svgElement.appendChild(defs);
 
-        const svg = d3.select("#graph");
-        svg.selectAll("*").remove();
+            const nodes = Array.from(nodesMap.values());
 
-        svg
-          .append("defs")
-          .append("marker")
-          .attr("id", "arrow")
-          .attr("viewBox", "0 -5 10 10")
-          .attr("refX", 25)
-          .attr("refY", 0)
-          .attr("markerWidth", 6)
-          .attr("markerHeight", 6)
-          .attr("orient", "auto")
-          .append("path")
-          .attr("d", "M0,-5L10,0L0,5")
-          .attr("fill", "#666");
+            // --- Layout Nodes (Simple Layered Approach) ---
+            const layers = new Map(); const nodeLayer = new Map();
+            const sortedNodes = [...nodes].sort((a, b) => a.es - b.es || a.id - b.id); // Sort by ES, then ID
+            let maxLayer = 0;
+            const esToLayer = new Map(); let currentLayerIndex = 0;
 
-        const width = +svg.attr("width");
-        const height = +svg.attr("height");
+            // Assign layers based on ES values
+            sortedNodes.forEach(node => {
+                const esRounded = Math.round(node.es * 100) / 100; // Group by similar ES
+                if (!esToLayer.has(esRounded)) { esToLayer.set(esRounded, currentLayerIndex++); }
+                node.layer = esToLayer.get(esRounded);
+                maxLayer = Math.max(maxLayer, node.layer);
+                if (!layers.has(node.layer)) layers.set(node.layer, []);
+                layers.get(node.layer).push(node.id);
+                nodeLayer.set(node.id, node.layer);
+            });
 
-        const simulation = d3
-          .forceSimulation(Array.from(nodes.values()))
-          .force(
-            "link",
-            d3
-              .forceLink(links)
-              .id((d) => d.id)
-              .distance(120)
-          )
-          .force("charge", d3.forceManyBody().strength(-300))
-          .force("center", d3.forceCenter(width / 2, height / 2))
-          .on("tick", ticked);
+            // Calculate SVG dimensions based on layout
+            let maxNodesInLayer = 0; layers.forEach(layerNodes => maxNodesInLayer = Math.max(maxNodesInLayer, layerNodes.length));
+            const layerContentHeight = maxNodesInLayer > 1 ? (maxNodesInLayer - 1) * V_SPACING : 0;
+            const totalHeight = PADDING * 2 + Math.max(layerContentHeight, NODE_RADIUS * 2);
+            const totalWidth = PADDING * 2 + (maxLayer > 0 ? maxLayer * H_SPACING : NODE_RADIUS * 2);
+            svgElement.setAttribute('viewBox', `0 0 ${Math.max(totalWidth, 600)} ${Math.max(totalHeight, 500)}`);
+            svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-        const link = svg
-          .selectAll(".link")
-          .data(links)
-          .enter()
-          .append("line")
-          .attr("class", "link")
-          .attr("stroke", "#999")
-          .attr("stroke-width", 2)
-          .attr("marker-end", "url(#arrow)");
+            // Calculate initial X, Y positions
+            layers.forEach((nodeIdsInLayer, layerIndex) => {
+                const layerNodeCount = nodeIdsInLayer.length;
+                const layerHeight = layerNodeCount > 1 ? (layerNodeCount - 1) * V_SPACING : 0;
+                const remainingHeight = totalHeight - PADDING * 2;
+                const startY = PADDING + Math.max(0, (remainingHeight - layerHeight) / 2); // Center vertically
+                const sortedNodeIds = nodeIdsInLayer.sort((a,b) => a - b); // Sort by ID for consistent vertical order
+                sortedNodeIds.forEach((nodeId, nodeIndex) => {
+                    const node = nodesMap.get(nodeId);
+                    node.x = PADDING + node.layer * H_SPACING; // Use assigned layer for X
+                    node.y = startY + nodeIndex * V_SPACING;
+                });
+            });
 
-        const linkLabel = svg
-          .selectAll(".link-label")
-          .data(links)
-          .enter()
-          .append("text")
-          .attr("font-size", 12)
-          .attr("fill", "#555")
-          .text((d) => `${d.label} (${d.duration})`);
-
-        const node = svg
-          .selectAll(".node")
-          .data(Array.from(nodes.values()))
-          .enter()
-          .append("circle")
-          .attr("class", "node")
-          .attr("r", 20)
-          .attr("fill", "#1a73e8")
-          .call(
-            d3
-              .drag()
-              .on("start", dragstarted)
-              .on("drag", dragged)
-              .on("end", dragended)
-          );
-
-        const label = svg
-          .selectAll(".label")
-          .data(Array.from(nodes.values()))
-          .enter()
-          .append("text")
-          .attr("text-anchor", "middle")
-          .attr("dy", 5)
-          .attr("fill", "white")
-          .text((d) => d.id);
-
-        function ticked() {
-          link
-            .attr("x1", (d) => d.source.x)
-            .attr("y1", (d) => d.source.y)
-            .attr("x2", (d) => d.target.x)
-            .attr("y2", (d) => d.target.y);
-
-          linkLabel
-            .attr("x", (d) => (d.source.x + d.target.x) / 2)
-            .attr("y", (d) => (d.source.y + d.target.y) / 2);
-
-          node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
-
-          label.attr("x", (d) => d.x).attr("y", (d) => d.y);
+            // --- Draw Edges & Nodes ---
+            const edgeGroup = document.createElementNS(SVG_NS, 'g'); edgeGroup.setAttribute('class', 'edges');
+            edges.forEach(edge => drawEdge(edge, edgeGroup, nodesMap)); // Draw edges first
+            svgElement.appendChild(edgeGroup);
+            const nodeGroup = document.createElementNS(SVG_NS, 'g'); nodeGroup.setAttribute('class', 'nodes');
+            nodes.forEach(node => { drawNode(node, nodeGroup); node.gElement = nodeGroup.lastChild; }); // Draw nodes on top
+            svgElement.appendChild(nodeGroup);
+            pertChartContainer.appendChild(svgElement);
+            addDragListeners(); // Enable dragging after elements are in the DOM
         }
 
-        function dragstarted(event, d) {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
-        }
+        // --- Helper to create marker (No changes) ---
+        function createMarker(id, color) { const marker = document.createElementNS(SVG_NS, 'marker'); marker.setAttribute('id', id); marker.setAttribute('markerWidth', '10'); marker.setAttribute('markerHeight', '7'); marker.setAttribute('refX', '9'); marker.setAttribute('refY', '3.5'); marker.setAttribute('orient', 'auto'); const polygon = document.createElementNS(SVG_NS, 'polygon'); polygon.setAttribute('points', '0 0, 10 3.5, 0 7'); polygon.setAttribute('fill', color); marker.appendChild(polygon); return marker; }
 
-        function dragged(event, d) {
-          d.fx = event.x;
-          d.fy = event.y;
-        }
+        // --- Helper to draw node (Displays calculated values) ---
+        function drawNode(node, parentGroup) { const nodeElement = document.createElementNS(SVG_NS, 'g'); nodeElement.setAttribute('class', `node ${node.isCritical ? 'critical' : ''}`); nodeElement.setAttribute('transform', `translate(${node.x}, ${node.y})`); nodeElement.setAttribute('data-node-id', node.id); const circle = document.createElementNS(SVG_NS, 'circle'); circle.setAttribute('r', NODE_RADIUS); nodeElement.appendChild(circle); const r = NODE_RADIUS * 0.95; const line1 = document.createElementNS(SVG_NS, 'line'); line1.setAttribute('class', 'divider'); line1.setAttribute('x1', -r); line1.setAttribute('y1', 0); line1.setAttribute('x2', r); line1.setAttribute('y2', 0); nodeElement.appendChild(line1); const line2 = document.createElementNS(SVG_NS, 'line'); line2.setAttribute('class', 'divider'); line2.setAttribute('x1', 0); line2.setAttribute('y1', -r); line2.setAttribute('x2', 0); line2.setAttribute('y2', r); nodeElement.appendChild(line2); const textOffset = NODE_RADIUS * 0.45; const nodeIdText = createTextElement('node-id', 0, -textOffset, node.id); nodeElement.appendChild(nodeIdText); const esText = createTextElement('es-text', -textOffset, 0, node.es); nodeElement.appendChild(esText); const lfText = createTextElement('lf-text', textOffset, 0, node.lf); nodeElement.appendChild(lfText); const slackText = createTextElement('slack-text', 0, textOffset, node.slack); nodeElement.appendChild(slackText); parentGroup.appendChild(nodeElement); }
 
-        function dragended(event, d) {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
-        }
+        // --- Helper to create text element (No changes) ---
+        function createTextElement(className, x, y, content) { const text = document.createElementNS(SVG_NS, 'text'); text.setAttribute('class', className); text.setAttribute('x', x); text.setAttribute('y', y); text.textContent = content; return text; }
 
-        const graph = new Map();
-        links.forEach(({ source, target, duration }) => {
-          const from = typeof source === "object" ? source.id : source;
-          const to = typeof target === "object" ? target.id : target;
-          if (!graph.has(from)) graph.set(from, []);
-          graph.get(from).push({ to, cost: duration });
-        });
+        // --- Helper to draw/update edge (Added text background) ---
+        function drawEdge(edge, parentGroup, nodesMap) {
+             const startNode = nodesMap.get(edge.startNodeId); const endNode = nodesMap.get(edge.endNodeId);
+             if (!startNode || !endNode) return;
+             const { startX, startY, endX, endY, angle, midX, midY } = calculateEdgePoints(startNode, endNode);
+             let edgeElement = edge.gElement; let textBgElement = edge.textBgElement;
 
-        const nodeKeys = Array.from(nodes.keys());
-        const start = Math.min(...nodeKeys);
-        const end = Math.max(...nodeKeys);
-        const allPaths = [];
+             if (!edgeElement) { // Create elements if they don't exist
+                 edgeElement = document.createElementNS(SVG_NS, 'g');
+                 edgeElement.setAttribute('class', `edge ${edge.isCritical ? 'critical' : ''} ${edge.isDummy ? 'dummy' : ''}`);
+                 edgeElement.setAttribute('data-edge-id', edge.id);
+                 const path = document.createElementNS(SVG_NS, 'path');
+                 path.setAttribute('marker-end', `url(#${edge.isCritical ? 'arrowhead-critical' : 'arrowhead'})`);
+                 if (edge.isDummy) path.setAttribute('stroke-dasharray', '5,5');
+                 edgeElement.appendChild(path); edge.pathElement = path;
+                 if (!edge.isDummy) {
+                     // textBgElement = document.createElementNS(SVG_NS, 'rect'); textBgElement.setAttribute('class', 'text-bg'); edgeElement.appendChild(textBgElement); edge.textBgElement = textBgElement; // Background rect removed for stroke approach
+                     const text = document.createElementNS(SVG_NS, 'text'); edgeElement.appendChild(text); edge.textElement = text;
+                 }
+                 parentGroup.appendChild(edgeElement); edge.gElement = edgeElement;
+             } else { // Update existing elements
+                 edgeElement.setAttribute('class', `edge ${edge.isCritical ? 'critical' : ''} ${edge.isDummy ? 'dummy' : ''}`);
+                 edge.pathElement.setAttribute('marker-end', `url(#${edge.isCritical ? 'arrowhead-critical' : 'arrowhead'})`);
+             }
 
-        function dfs(current, path, cost, costStr) {
-          if (current === end) {
-            allPaths.push({ path: [...path, current], cost, costStr });
-            return;
-          }
-          if (!graph.has(current)) return;
-          for (const next of graph.get(current)) {
-            if (path.includes(next.to)) continue;
-            dfs(
-              next.to,
-              [...path, current],
-              cost + next.cost,
-              costStr + (costStr ? "+" : "") + next.cost
-            );
-          }
-        }
+             edge.pathElement.setAttribute('d', `M ${startX},${startY} L ${endX},${endY}`); // Update path
 
-        dfs(start, [], 0, "");
-        allPaths.sort((a, b) => a.cost - b.cost);
+             if (!edge.isDummy && edge.textElement) { // Update text position and content
+                 const textOffset = -10;
+                 const textX = midX + textOffset * Math.sin(angle * Math.PI / 180);
+                 const textY = midY - textOffset * Math.cos(angle * Math.PI / 180);
+                 edge.textElement.setAttribute('x', textX); edge.textElement.setAttribute('y', textY);
+                 edge.textElement.textContent = `${edge.id} (${edge.duration})`;
+                 // Background rect update removed
+             }
+         }
 
-        const resultDiv = document.getElementById("results");
-        if (allPaths.length > 0) {
-          const list = allPaths
-            .map(
-              (p) => `<li>${p.path.join(" → ")} (${p.costStr}=${p.cost})</li>`
-            )
-            .join("");
+        // --- Helper to calculate edge points (No changes) ---
+        function calculateEdgePoints(startNode, endNode) { const dx = endNode.x - startNode.x; const dy = endNode.y - startNode.y; const dist = Math.sqrt(dx * dx + dy * dy); let startX = startNode.x, startY = startNode.y, endX = endNode.x, endY = endNode.y; let angle = Math.atan2(dy, dx); if (dist > NODE_RADIUS * 2) { const ratio = NODE_RADIUS / dist; startX = startNode.x + dx * ratio; startY = startNode.y + dy * ratio; endX = endNode.x - dx * ratio; endY = endNode.y - dy * ratio; } else if (dist > 0) { startX = startNode.x + dx * 0.4; startY = startNode.y + dy * 0.4; endX = endNode.x - dx * 0.4; endY = endNode.y - dy * 0.4; } const midX = (startX + endX) / 2; const midY = (startY + endY) / 2; return { startX, startY, endX, endY, angle: angle * 180 / Math.PI, midX, midY }; }
 
-          resultDiv.innerHTML = `
-          <h3>Kết quả:</h3>
-          <ul>${list}</ul>
-          <p><strong>Đường ngắn nhất:</strong> ${allPaths[0].path.join(
-            " → "
-          )} (${allPaths[0].costStr}=${allPaths[0].cost})</p>
-          <p><strong>Đường dài nhất:</strong> ${allPaths[
-            allPaths.length - 1
-          ].path.join(" → ")} (${allPaths[allPaths.length - 1].costStr}=${
-            allPaths[allPaths.length - 1].cost
-          })</p>
-        `;
-        } else {
-          resultDiv.innerHTML =
-            "<p>Không tìm được đường đi từ đầu đến cuối.</p>";
-        }
-      }
+        // --- Drag and Drop Logic (No changes) ---
+        function addDragListeners() { if (!svgElement) return; svgElement.addEventListener('mousedown', startDrag); svgElement.addEventListener('mousemove', drag); svgElement.addEventListener('mouseup', endDrag); svgElement.addEventListener('mouseleave', endDrag); svgElement.addEventListener('touchstart', startDrag, { passive: false }); svgElement.addEventListener('touchmove', drag, { passive: false }); svgElement.addEventListener('touchend', endDrag); svgElement.addEventListener('touchcancel', endDrag); }
+        function removeDragListeners() { if (!svgElement) return; svgElement.removeEventListener('mousedown', startDrag); svgElement.removeEventListener('mousemove', drag); svgElement.removeEventListener('mouseup', endDrag); svgElement.removeEventListener('mouseleave', endDrag); svgElement.removeEventListener('touchstart', startDrag); svgElement.removeEventListener('touchmove', drag); svgElement.removeEventListener('touchend', endDrag); svgElement.removeEventListener('touchcancel', endDrag); }
+        function getMousePosition(evt) { if (!svgElement) return { x: 0, y: 0 }; const CTM = svgElement.getScreenCTM(); if (!CTM) return { x: 0, y: 0 }; let clientX, clientY; if (evt.touches) { clientX = evt.touches[0].clientX; clientY = evt.touches[0].clientY; } else { clientX = evt.clientX; clientY = evt.clientY; } return { x: (clientX - CTM.e) / CTM.a, y: (clientY - CTM.f) / CTM.d }; }
+        function startDrag(evt) { let targetElement = evt.target; while(targetElement && targetElement !== svgElement) { if (targetElement.classList && targetElement.classList.contains('node')) { selectedNodeElement = targetElement; break; } targetElement = targetElement.parentNode; } if (selectedNodeElement) { evt.preventDefault(); isDragging = true; selectedNodeElement.classList.add('dragging'); svgElement.classList.add('grabbing'); const startPos = getMousePosition(evt); const transform = selectedNodeElement.transform.baseVal; const currentTranslate = transform.numberOfItems > 0 ? transform.getItem(0).matrix : { e: 0, f: 0 }; offset.x = currentTranslate.e - startPos.x; offset.y = currentTranslate.f - startPos.y; } }
+        function drag(evt) { if (isDragging && selectedNodeElement) { evt.preventDefault(); const coord = getMousePosition(evt); const newX = coord.x + offset.x; const newY = coord.y + offset.y; selectedNodeElement.setAttribute('transform', `translate(${newX}, ${newY})`); const nodeId = parseInt(selectedNodeElement.getAttribute('data-node-id'), 10); const nodeData = nodesMapRef.get(nodeId); if (nodeData) { nodeData.x = newX; nodeData.y = newY; updateConnectedEdges(nodeData); } } }
+        function endDrag(evt) { if (isDragging) { if (selectedNodeElement) { selectedNodeElement.classList.remove('dragging'); } if (svgElement) { svgElement.classList.remove('grabbing'); } isDragging = false; selectedNodeElement = null; } }
+        function updateConnectedEdges(movedNode) { if (!edgesRef || !nodesMapRef || !svgElement) return; const edgeGroup = svgElement.querySelector('.edges'); if (!edgeGroup) return; movedNode.outgoingEdges.forEach(edge => drawEdge(edge, edgeGroup, nodesMapRef)); movedNode.incomingEdges.forEach(edge => drawEdge(edge, edgeGroup, nodesMapRef)); }
+
+        // --- Display Results Table (Displays calculated values) ---
+        function displayResultsTable(tasks, nodesMap) {
+             resultsTableContainer.innerHTML = '';
+             const edgesToDisplay = edgesRef; // Use edgesRef which has calculated task times
+             if (!edgesToDisplay || edgesToDisplay.length === 0) { resultsTableContainer.innerHTML = '<span class="text-gray-500">Không có dữ liệu cạnh để hiển thị kết quả chi tiết.</span>'; return; }
+             const table = document.createElement('table'); table.className = 'w-full border-collapse border border-gray-300 text-sm md:text-base'; const thead = table.createTHead();
+             thead.innerHTML = ` <tr class="bg-gray-200"> <th class="border border-gray-300 p-2">Công việc</th> <th class="border border-gray-300 p-2">Thời gian TH</th> <th class="border border-gray-300 p-2">ES (Task)</th> <th class="border border-gray-300 p-2">EF (Task)</th> <th class="border border-gray-300 p-2">LS (Task)</th> <th class="border border-gray-300 p-2">LF (Task)</th> <th class="border border-gray-300 p-2">Slack (Dự trữ)</th> <th class="border border-gray-300 p-2">Đường găng?</th> </tr> `;
+             const tbody = table.createTBody();
+             edgesToDisplay.filter(task => !task.isDummy).forEach(task => {
+                 const row = tbody.insertRow();
+                 row.innerHTML = ` <td class="border border-gray-300 p-2">${task.id}</td> <td class="border border-gray-300 p-2 text-center">${task.duration}</td> <td class="border border-gray-300 p-2 text-center">${task.es}</td> <td class="border border-gray-300 p-2 text-center">${task.ef}</td> <td class="border border-gray-300 p-2 text-center">${task.ls}</td> <td class="border border-gray-300 p-2 text-center">${task.lf}</td> <td class="border border-gray-300 p-2 text-center ${task.isCritical ? 'text-orange-600 font-bold' : ''}">${task.slack}</td> <td class="border border-gray-300 p-2 text-center ${task.isCritical ? 'text-orange-600 font-bold' : ''}">${task.isCritical ? 'Có' : 'Không'}</td> `;
+             });
+             resultsTableContainer.appendChild(table);
+         }
+
+        // --- Initial Setup ---
+        clearError(); // Hide error message initially
+        loadSampleData(sampleData1); // Load sample data 1 by default
+
     </script>
-  </body>
+</body>
 </html>

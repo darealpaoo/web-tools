@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PERT Chart Generator</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        padding: 2rem;
+        background: #f0f2f5;
+        color: #333;
+        margin: 0;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        color: #1a73e8;
+        margin-bottom: 1.5rem;
+        font-size: 2rem;
+      }
+
+      .controls {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 2rem;
+      }
+
+      label {
+        display: block;
+        margin-top: 1rem;
+        font-weight: 500;
+        color: #555;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 1rem;
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+      }
+
+      input:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #1a73e8;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+      }
+
+      textarea {
+        min-height: 200px;
+        resize: vertical;
+      }
+
+      button {
+        background: #1a73e8;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        margin-top: 1rem;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      button:hover {
+        background: #1557b0;
+      }
+
+      一座 #results {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 2rem;
+      }
+
+      #results h3 {
+        color: #1a73e8;
+        margin-top: 0;
+      }
+
+      #results ul {
+        padding-left: 1.5rem;
+        margin: 1rem 0;
+      }
+
+      #results p {
+        margin: 0.5rem 0;
+      }
+
+      #results strong {
+        color: #1557b0;
+      }
+
+      svg {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        height: 600px;
+      }
+
+      .node {
+        cursor: move;
+      }
+
+      marker {
+        fill: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="controls">
+        <label for="nodeCount">Số node:</label>
+        <input type="number" id="nodeCount" min="2" value="5" />
+        <button onclick="generateRandomData()">Random dữ liệu</button>
+        <label for="dataInput">Nhập dữ liệu dạng JSON:</label>
+        <textarea id="dataInput" rows="10">
+[
+  ["A", 1, 2, 2],
+  ["B", 2, 3, 2],
+  ["C", 2, 4, 3],
+  ["D", 2, 5, 4],
+  ["E", 3, 6, 2],
+  ["F", 4, 6, 3],
+  ["G", 5, 7, 6],
+  ["H", 6, 8, 2],
+  ["I", 6, 7, 5],
+  ["J", 7, 8, 1],
+  ["K", 8, 9, 2]
+]</textarea
+        >
+        <button onclick="renderGraph()">Submit</button>
+      </div>
+
+      <div id="results"></div>
+
+      <svg id="graph" width="1000" height="600">
+        <defs>
+          <marker
+            id="arrow"
+            viewBox="0 -5 10 10"
+            refX="15"
+            refY="0"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto"
+          >
+            <path d="M0,-5L10,0L0,5" />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <script>
+      function generateRandomData() {
+        const nodeCount = parseInt(document.getElementById("nodeCount").value);
+        if (isNaN(nodeCount) || nodeCount < 2) {
+          alert("Vui lòng nhập số node hợp lệ (tối thiểu 2)");
+          return;
+        }
+
+        const data = [];
+        const usedConnections = new Set();
+
+        for (let i = 1; i < nodeCount; i++) {
+          const duration = Math.floor(Math.random() * 5) + 1;
+          const label = String.fromCharCode(65 + data.length);
+          data.push([label, i, i + 1, duration]);
+          usedConnections.add(`${i}-${i + 1}`);
+        }
+
+        const extraEdges = Math.floor(nodeCount * 1.5);
+        for (let i = 0; i < extraEdges; i++) {
+          const from = Math.floor(Math.random() * (nodeCount - 1)) + 1;
+          const to = Math.floor(Math.random() * (nodeCount - from)) + from + 1;
+          const connection = `${from}-${to}`;
+
+          if (
+            !usedConnections.has(connection) &&
+            from !== to &&
+            to <= nodeCount
+          ) {
+            const duration = Math.floor(Math.random() * 5) + 1;
+            const label = String.fromCharCode(65 + data.length);
+            data.push([label, from, to, duration]);
+            usedConnections.add(connection);
+          }
+        }
+
+        const lastNode = nodeCount;
+        if (!data.some(([_, from, to]) => to === lastNode)) {
+          const from = Math.floor(Math.random() * (nodeCount - 1)) + 1;
+          const duration = Math.floor(Math.random() * 5) + 1;
+          const label = String.fromCharCode(65 + data.length);
+          data.push([label, from, lastNode, duration]);
+        }
+
+        document.getElementById("dataInput").value = JSON.stringify(
+          data,
+          null,
+          2
+        );
+      }
+
+      function renderGraph() {
+        const rawInput = document.getElementById("dataInput").value;
+        let data;
+        try {
+          data = JSON.parse(rawInput);
+        } catch (e) {
+          alert("Lỗi cú pháp JSON");
+          return;
+        }
+
+        const nodes = new Map();
+        const links = [];
+
+        data.forEach(([label, from, to, duration]) => {
+          if (!nodes.has(from)) nodes.set(from, { id: from });
+          if (!nodes.has(to)) nodes.set(to, { id: to });
+          links.push({ source: from, target: to, label, duration });
+        });
+
+        const svg = d3.select("#graph");
+        svg.selectAll("*").remove();
+
+        svg
+          .append("defs")
+          .append("marker")
+          .attr("id", "arrow")
+          .attr("viewBox", "0 -5 10 10")
+          .attr("refX", 25)
+          .attr("refY", 0)
+          .attr("markerWidth", 6)
+          .attr("markerHeight", 6)
+          .attr("orient", "auto")
+          .append("path")
+          .attr("d", "M0,-5L10,0L0,5")
+          .attr("fill", "#666");
+
+        const width = +svg.attr("width");
+        const height = +svg.attr("height");
+
+        const simulation = d3
+          .forceSimulation(Array.from(nodes.values()))
+          .force(
+            "link",
+            d3
+              .forceLink(links)
+              .id((d) => d.id)
+              .distance(120)
+          )
+          .force("charge", d3.forceManyBody().strength(-300))
+          .force("center", d3.forceCenter(width / 2, height / 2))
+          .on("tick", ticked);
+
+        const link = svg
+          .selectAll(".link")
+          .data(links)
+          .enter()
+          .append("line")
+          .attr("class", "link")
+          .attr("stroke", "#999")
+          .attr("stroke-width", 2)
+          .attr("marker-end", "url(#arrow)");
+
+        const linkLabel = svg
+          .selectAll(".link-label")
+          .data(links)
+          .enter()
+          .append("text")
+          .attr("font-size", 12)
+          .attr("fill", "#555")
+          .text((d) => `${d.label} (${d.duration})`);
+
+        const node = svg
+          .selectAll(".node")
+          .data(Array.from(nodes.values()))
+          .enter()
+          .append("circle")
+          .attr("class", "node")
+          .attr("r", 20)
+          .attr("fill", "#1a73e8")
+          .call(
+            d3
+              .drag()
+              .on("start", dragstarted)
+              .on("drag", dragged)
+              .on("end", dragended)
+          );
+
+        const label = svg
+          .selectAll(".label")
+          .data(Array.from(nodes.values()))
+          .enter()
+          .append("text")
+          .attr("text-anchor", "middle")
+          .attr("dy", 5)
+          .attr("fill", "white")
+          .text((d) => d.id);
+
+        function ticked() {
+          link
+            .attr("x1", (d) => d.source.x)
+            .attr("y1", (d) => d.source.y)
+            .attr("x2", (d) => d.target.x)
+            .attr("y2", (d) => d.target.y);
+
+          linkLabel
+            .attr("x", (d) => (d.source.x + d.target.x) / 2)
+            .attr("y", (d) => (d.source.y + d.target.y) / 2);
+
+          node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+
+          label.attr("x", (d) => d.x).attr("y", (d) => d.y);
+        }
+
+        function dragstarted(event, d) {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+          d.fx = event.x;
+          d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+          if (!event.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+        }
+
+        const graph = new Map();
+        links.forEach(({ source, target, duration }) => {
+          const from = typeof source === "object" ? source.id : source;
+          const to = typeof target === "object" ? target.id : target;
+          if (!graph.has(from)) graph.set(from, []);
+          graph.get(from).push({ to, cost: duration });
+        });
+
+        const nodeKeys = Array.from(nodes.keys());
+        const start = Math.min(...nodeKeys);
+        const end = Math.max(...nodeKeys);
+        const allPaths = [];
+
+        function dfs(current, path, cost, costStr) {
+          if (current === end) {
+            allPaths.push({ path: [...path, current], cost, costStr });
+            return;
+          }
+          if (!graph.has(current)) return;
+          for (const next of graph.get(current)) {
+            if (path.includes(next.to)) continue;
+            dfs(
+              next.to,
+              [...path, current],
+              cost + next.cost,
+              costStr + (costStr ? "+" : "") + next.cost
+            );
+          }
+        }
+
+        dfs(start, [], 0, "");
+        allPaths.sort((a, b) => a.cost - b.cost);
+
+        const resultDiv = document.getElementById("results");
+        if (allPaths.length > 0) {
+          const list = allPaths
+            .map(
+              (p) => `<li>${p.path.join(" → ")} (${p.costStr}=${p.cost})</li>`
+            )
+            .join("");
+
+          resultDiv.innerHTML = `
+          <h3>Kết quả:</h3>
+          <ul>${list}</ul>
+          <p><strong>Đường ngắn nhất:</strong> ${allPaths[0].path.join(
+            " → "
+          )} (${allPaths[0].costStr}=${allPaths[0].cost})</p>
+          <p><strong>Đường dài nhất:</strong> ${allPaths[
+            allPaths.length - 1
+          ].path.join(" → ")} (${allPaths[allPaths.length - 1].costStr}=${
+            allPaths[allPaths.length - 1].cost
+          })</p>
+        `;
+        } else {
+          resultDiv.innerHTML =
+            "<p>Không tìm được đường đi từ đầu đến cuối.</p>";
+        }
+      }
+    </script>
+  </body>
+</html>
