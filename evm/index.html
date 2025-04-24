@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Công cụ Tính toán EVM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Sử dụng font Inter làm mặc định */
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      /* Định dạng số tiền tệ */
+      .currency::before {
+        content: "$";
+        margin-right: 2px;
+      }
+      /* Căn giữa nội dung và thêm khoảng đệm */
+      .container {
+        max-width: 800px; /* Giới hạn chiều rộng tối đa */
+        margin-left: auto;
+        margin-right: auto;
+        padding: 2rem; /* Thêm khoảng đệm */
+      }
+      /* Thêm hiệu ứng đổ bóng và bo tròn cho card */
+      .card {
+        background-color: white;
+        border-radius: 0.75rem; /* bo tròn góc */
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
+          0 2px 4px -2px rgb(0 0 0 / 0.1);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+      /* Kiểu cho input */
+      .input-field {
+        border: 1px solid #e2e8f0; /* Màu viền xám nhạt */
+        border-radius: 0.375rem; /* Bo tròn góc */
+        padding: 0.5rem 0.75rem;
+        width: 100%;
+        transition: border-color 0.2s ease-in-out;
+      }
+      .input-field:focus {
+        outline: none;
+        border-color: #4f46e5; /* Màu viền tím khi focus */
+        box-shadow: 0 0 0 1px #4f46e5;
+      }
+      /* Kiểu cho nút */
+      .btn {
+        background-color: #4f46e5; /* Màu nền tím */
+        color: white;
+        font-weight: 600;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.375rem; /* Bo tròn góc */
+        transition: background-color 0.2s ease-in-out;
+        cursor: pointer;
+      }
+      .btn:hover {
+        background-color: #4338ca; /* Màu nền tím đậm hơn khi hover */
+      }
+      /* Kiểu cho kết quả */
+      .result-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f1f5f9; /* Đường kẻ phân cách */
+      }
+      .result-item:last-child {
+        border-bottom: none;
+      }
+      .result-label {
+        font-weight: 500;
+        color: #475569; /* Màu chữ xám */
+      }
+      .result-value {
+        font-weight: 600;
+        color: #1e293b; /* Màu chữ đen */
+      }
+      /* Kiểu cho thông báo lỗi */
+      #error-message {
+        color: #dc2626; /* Màu đỏ */
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+      }
+      /* Kiểu cho phần diễn giải */
+      .interpretation-item {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+      }
+      .interpretation-item span {
+        font-weight: 600;
+      }
+      .positive {
+        color: #16a34a;
+      } /* Màu xanh lá */
+      .negative {
+        color: #dc2626;
+      } /* Màu đỏ */
+      .neutral {
+        color: #64748b;
+      } /* Màu xám */
+    </style>
+  </head>
+  <body class="bg-gray-100">
+    <div class="container">
+      <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">
+        Công cụ Tính toán Quản lý Giá trị Thu được (EVM)
+      </h1>
+
+      <div class="card">
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">
+          Nhập Dữ liệu Dự án
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="pv" class="block text-sm font-medium text-gray-600 mb-1"
+              >Giá trị Kế hoạch (PV)</label
+            >
+            <input
+              type="number"
+              id="pv"
+              value="23000"
+              class="input-field"
+              placeholder="Ví dụ: 23000"
+            />
+          </div>
+          <div>
+            <label for="ev" class="block text-sm font-medium text-gray-600 mb-1"
+              >Giá trị Thu được (EV)</label
+            >
+            <input
+              type="number"
+              id="ev"
+              value="20000"
+              class="input-field"
+              placeholder="Ví dụ: 20000"
+            />
+          </div>
+          <div>
+            <label for="ac" class="block text-sm font-medium text-gray-600 mb-1"
+              >Chi phí Thực tế (AC)</label
+            >
+            <input
+              type="number"
+              id="ac"
+              value="25000"
+              class="input-field"
+              placeholder="Ví dụ: 25000"
+            />
+          </div>
+          <div>
+            <label
+              for="bac"
+              class="block text-sm font-medium text-gray-600 mb-1"
+              >Ngân sách Tổng thể (BAC)</label
+            >
+            <input
+              type="number"
+              id="bac"
+              value="120000"
+              class="input-field"
+              placeholder="Ví dụ: 120000"
+            />
+          </div>
+          <div class="md:col-span-2">
+            <label
+              for="duration"
+              class="block text-sm font-medium text-gray-600 mb-1"
+              >Thời gian Dự kiến Ban đầu (tháng)</label
+            >
+            <input
+              type="number"
+              id="duration"
+              value="12"
+              class="input-field"
+              placeholder="Ví dụ: 12"
+            />
+          </div>
+        </div>
+        <div class="mt-6 text-center">
+          <button id="calculateBtn" class="btn">Tính toán</button>
+        </div>
+        <div id="error-message" class="mt-4 text-center"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">
+          Kết quả Tính toán
+        </h2>
+        <div id="results" class="space-y-2">
+          <div class="result-item">
+            <span class="result-label">Độ lệch Chi phí (CV):</span>
+            <span id="cv" class="result-value">Chưa tính</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Độ lệch Lịch biểu (SV):</span>
+            <span id="sv" class="result-value">Chưa tính</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Chỉ số Hiệu suất Chi phí (CPI):</span>
+            <span id="cpi" class="result-value">Chưa tính</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Chỉ số Hiệu suất Lịch biểu (SPI):</span>
+            <span id="spi" class="result-value">Chưa tính</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label"
+              >Ước tính Chi phí khi Hoàn thành (EAC):</span
+            >
+            <span id="eac" class="result-value">Chưa tính</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label"
+              >Ước tính Thời gian Hoàn thành (tháng):</span
+            >
+            <span id="estimatedDuration" class="result-value">Chưa tính</span>
+          </div>
+        </div>
+        <div id="interpretation" class="mt-6 border-t border-gray-200 pt-4">
+          <h3 class="text-lg font-semibold mb-2 text-gray-700">
+            Diễn giải Kết quả
+          </h3>
+          <div id="interpretation-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Lấy các phần tử DOM
+      const pvInput = document.getElementById("pv");
+      const evInput = document.getElementById("ev");
+      const acInput = document.getElementById("ac");
+      const bacInput = document.getElementById("bac");
+      const durationInput = document.getElementById("duration");
+      const calculateBtn = document.getElementById("calculateBtn");
+      const cvOutput = document.getElementById("cv");
+      const svOutput = document.getElementById("sv");
+      const cpiOutput = document.getElementById("cpi");
+      const spiOutput = document.getElementById("spi");
+      const eacOutput = document.getElementById("eac");
+      const estimatedDurationOutput =
+        document.getElementById("estimatedDuration");
+      const errorMessage = document.getElementById("error-message");
+      const interpretationContent = document.getElementById(
+        "interpretation-content"
+      );
+
+      // Hàm định dạng số tiền tệ
+      function formatCurrency(value) {
+        if (isNaN(value) || value === null) return "N/A";
+        // Sử dụng toLocaleString để định dạng số với dấu phẩy ngăn cách hàng nghìn
+        return value.toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        });
+      }
+
+      // Hàm định dạng số thập phân
+      function formatDecimal(value, digits = 2) {
+        if (isNaN(value) || value === null || !isFinite(value)) return "N/A";
+        return value.toFixed(digits);
+      }
+
+      // Hàm định dạng thời gian (tháng)
+      function formatDuration(value) {
+        if (isNaN(value) || value === null || !isFinite(value)) return "N/A";
+        return `${formatDecimal(value, 2)} tháng`;
+      }
+
+      // Hàm thực hiện tính toán
+      function calculateEVM() {
+        // Xóa thông báo lỗi cũ
+        errorMessage.textContent = "";
+        interpretationContent.innerHTML = ""; // Xóa diễn giải cũ
+
+        // Lấy giá trị từ input và chuyển đổi sang số
+        const pv = parseFloat(pvInput.value);
+        const ev = parseFloat(evInput.value);
+        const ac = parseFloat(acInput.value);
+        const bac = parseFloat(bacInput.value);
+        const duration = parseFloat(durationInput.value);
+
+        // Kiểm tra đầu vào hợp lệ
+        if (
+          isNaN(pv) ||
+          isNaN(ev) ||
+          isNaN(ac) ||
+          isNaN(bac) ||
+          isNaN(duration)
+        ) {
+          errorMessage.textContent =
+            "Vui lòng nhập giá trị số hợp lệ cho tất cả các trường.";
+          // Đặt lại kết quả về trạng thái ban đầu
+          cvOutput.textContent = "Lỗi";
+          svOutput.textContent = "Lỗi";
+          cpiOutput.textContent = "Lỗi";
+          spiOutput.textContent = "Lỗi";
+          eacOutput.textContent = "Lỗi";
+          estimatedDurationOutput.textContent = "Lỗi";
+          return;
+        }
+        if (duration <= 0) {
+          errorMessage.textContent =
+            "Thời gian dự kiến ban đầu phải lớn hơn 0.";
+          estimatedDurationOutput.textContent = "Lỗi";
+          spiOutput.textContent = "Lỗi"; // SPI cũng bị ảnh hưởng
+          return;
+        }
+
+        // --- Tính toán các chỉ số ---
+        const cv = ev - ac;
+        const sv = ev - pv;
+
+        // Xử lý trường hợp chia cho 0
+        const cpi = ac !== 0 ? ev / ac : null;
+        const spi = pv !== 0 ? ev / pv : null;
+        const eac = cpi !== null && cpi !== 0 ? bac / cpi : null;
+        const estimatedDuration =
+          spi !== null && spi !== 0 ? duration / spi : null;
+
+        // --- Hiển thị kết quả ---
+        cvOutput.textContent = formatCurrency(cv);
+        svOutput.textContent = formatCurrency(sv);
+        cpiOutput.textContent = formatDecimal(cpi);
+        spiOutput.textContent = formatDecimal(spi);
+        eacOutput.textContent = formatCurrency(eac);
+        estimatedDurationOutput.textContent = formatDuration(estimatedDuration);
+
+        // --- Thêm diễn giải ---
+        let interpretationHTML = "";
+
+        // Diễn giải CV và CPI (Ngân sách)
+        if (cv > 0) {
+          interpretationHTML += `<div class="interpretation-item positive"><span>Ngân sách:</span> Dự án đang thực hiện dưới ngân sách (${formatCurrency(
+            cv
+          )}).</div>`;
+        } else if (cv < 0) {
+          interpretationHTML += `<div class="interpretation-item negative"><span>Ngân sách:</span> Dự án đang vượt ngân sách (${formatCurrency(
+            cv
+          )}).</div>`;
+        } else {
+          interpretationHTML += `<div class="interpretation-item neutral"><span>Ngân sách:</span> Dự án đang thực hiện đúng ngân sách.</div>`;
+        }
+        if (cpi !== null) {
+          if (cpi > 1) {
+            interpretationHTML += `<div class="interpretation-item positive"><span>Hiệu suất chi phí (CPI=${formatDecimal(
+              cpi
+            )}):</span> Tốt hơn kế hoạch (cứ 1$ chi ra tạo được ${formatCurrency(
+              cpi
+            )} giá trị).</div>`;
+          } else if (cpi < 1) {
+            interpretationHTML += `<div class="interpretation-item negative"><span>Hiệu suất chi phí (CPI=${formatDecimal(
+              cpi
+            )}):</span> Kém hơn kế hoạch (cứ 1$ chi ra chỉ tạo được ${formatCurrency(
+              cpi
+            )} giá trị).</div>`;
+          } else {
+            interpretationHTML += `<div class="interpretation-item neutral"><span>Hiệu suất chi phí (CPI=${formatDecimal(
+              cpi
+            )}):</span> Đúng như kế hoạch.</div>`;
+          }
+        } else {
+          interpretationHTML += `<div class="interpretation-item neutral"><span>Hiệu suất chi phí (CPI):</span> Không thể tính (AC=0).</div>`;
+        }
+
+        // Diễn giải SV và SPI (Lịch biểu)
+        if (sv > 0) {
+          interpretationHTML += `<div class="interpretation-item positive"><span>Lịch biểu:</span> Dự án đang vượt tiến độ (${formatCurrency(
+            sv
+          )}).</div>`;
+        } else if (sv < 0) {
+          interpretationHTML += `<div class="interpretation-item negative"><span>Lịch biểu:</span> Dự án đang chậm tiến độ (${formatCurrency(
+            sv
+          )}).</div>`;
+        } else {
+          interpretationHTML += `<div class="interpretation-item neutral"><span>Lịch biểu:</span> Dự án đang đúng tiến độ.</div>`;
+        }
+        if (spi !== null) {
+          if (spi > 1) {
+            interpretationHTML += `<div class="interpretation-item positive"><span>Hiệu suất lịch biểu (SPI=${formatDecimal(
+              spi
+            )}):</span> Nhanh hơn kế hoạch.</div>`;
+          } else if (spi < 1) {
+            interpretationHTML += `<div class="interpretation-item negative"><span>Hiệu suất lịch biểu (SPI=${formatDecimal(
+              spi
+            )}):</span> Chậm hơn kế hoạch.</div>`;
+          } else {
+            interpretationHTML += `<div class="interpretation-item neutral"><span>Hiệu suất lịch biểu (SPI=${formatDecimal(
+              spi
+            )}):</span> Đúng như kế hoạch.</div>`;
+          }
+        } else {
+          interpretationHTML += `<div class="interpretation-item neutral"><span>Hiệu suất lịch biểu (SPI):</span> Không thể tính (PV=0).</div>`;
+        }
+
+        // Diễn giải EAC
+        if (eac !== null) {
+          interpretationHTML += `<div class="interpretation-item ${
+            eac > bac ? "negative" : eac < bac ? "positive" : "neutral"
+          }"><span>Chi phí dự kiến (EAC=${formatCurrency(
+            eac
+          )}):</span> Dự kiến ${
+            eac > bac ? "vượt" : eac < bac ? "thấp hơn" : "bằng"
+          } ngân sách gốc (BAC=${formatCurrency(bac)}).</div>`;
+        } else {
+          interpretationHTML += `<div class="interpretation-item neutral"><span>Chi phí dự kiến (EAC):</span> Không thể tính (CPI=0 hoặc không xác định).</div>`;
+        }
+
+        // Diễn giải Thời gian dự kiến
+        if (estimatedDuration !== null) {
+          interpretationHTML += `<div class="interpretation-item ${
+            estimatedDuration > duration
+              ? "negative"
+              : estimatedDuration < duration
+              ? "positive"
+              : "neutral"
+          }"><span>Thời gian dự kiến (${formatDuration(
+            estimatedDuration
+          )}):</span> Dự kiến ${
+            estimatedDuration > duration
+              ? "hoàn thành muộn hơn"
+              : estimatedDuration < duration
+              ? "hoàn thành sớm hơn"
+              : "hoàn thành đúng"
+          } kế hoạch (${formatDuration(duration)}).</div>`;
+        } else {
+          interpretationHTML += `<div class="interpretation-item neutral"><span>Thời gian dự kiến:</span> Không thể tính (SPI=0 hoặc không xác định).</div>`;
+        }
+
+        interpretationContent.innerHTML = interpretationHTML;
+
+        // Thêm màu sắc cho CV và SV dựa trên giá trị
+        cvOutput.classList.toggle("text-green-600", cv > 0);
+        cvOutput.classList.toggle("text-red-600", cv < 0);
+        cvOutput.classList.toggle("text-gray-700", cv === 0);
+
+        svOutput.classList.toggle("text-green-600", sv > 0);
+        svOutput.classList.toggle("text-red-600", sv < 0);
+        svOutput.classList.toggle("text-gray-700", sv === 0);
+
+        // Thêm màu sắc cho CPI và SPI
+        if (cpi !== null) {
+          cpiOutput.classList.toggle("text-green-600", cpi > 1);
+          cpiOutput.classList.toggle("text-red-600", cpi < 1);
+          cpiOutput.classList.toggle("text-gray-700", cpi === 1);
+        } else {
+          cpiOutput.classList.remove("text-green-600", "text-red-600");
+          cpiOutput.classList.add("text-gray-700");
+        }
+        if (spi !== null) {
+          spiOutput.classList.toggle("text-green-600", spi > 1);
+          spiOutput.classList.toggle("text-red-600", spi < 1);
+          spiOutput.classList.toggle("text-gray-700", spi === 1);
+        } else {
+          spiOutput.classList.remove("text-green-600", "text-red-600");
+          spiOutput.classList.add("text-gray-700");
+        }
+      }
+
+      // Gắn sự kiện click cho nút tính toán
+      calculateBtn.addEventListener("click", calculateEVM);
+
+      // Gọi hàm tính toán lần đầu khi tải trang với giá trị mặc định
+      document.addEventListener("DOMContentLoaded", calculateEVM);
+    </script>
+  </body>
+</html>
