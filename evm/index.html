@@ -171,21 +171,78 @@
             <label
               for="duration"
               class="block text-sm font-medium text-gray-600 mb-1"
-              >Thời gian Dự kiến Ban đầu (tháng)</label
+              >Thời gian Dự kiến Ban đầu (ngày)</label
             >
             <input
               type="number"
               id="duration"
-              value="12"
+              value="30"
               class="input-field"
-              placeholder="Ví dụ: 12"
+              placeholder="Ví dụ: 30"
             />
           </div>
         </div>
-        <div class="mt-6 text-center">
+        <div class="mt-6 text-center space-x-4">
           <button id="calculateBtn" class="btn">Tính toán</button>
+          <button id="randomBtn" class="btn bg-purple-600 hover:bg-purple-700">
+            Random dữ liệu
+          </button>
         </div>
         <div id="error-message" class="mt-4 text-center"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">
+          Giải thích các chỉ số
+        </h2>
+        <div class="space-y-4">
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <h3 class="font-semibold text-gray-800 mb-2">
+              Giá trị Kế hoạch (PV)
+            </h3>
+            <p class="text-gray-600">
+              Là giá trị công việc đã được lên kế hoạch thực hiện tại thời điểm
+              hiện tại. Đây là ngân sách dự kiến cho công việc đã được lên kế
+              hoạch.
+            </p>
+          </div>
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <h3 class="font-semibold text-gray-800 mb-2">
+              Giá trị Thu được (EV)
+            </h3>
+            <p class="text-gray-600">
+              Là giá trị thực tế của công việc đã hoàn thành tại thời điểm hiện
+              tại. Đây là ngân sách dự kiến cho công việc đã thực sự hoàn thành.
+            </p>
+          </div>
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <h3 class="font-semibold text-gray-800 mb-2">
+              Chi phí Thực tế (AC)
+            </h3>
+            <p class="text-gray-600">
+              Là tổng chi phí thực tế đã chi tiêu cho công việc đã hoàn thành
+              tại thời điểm hiện tại.
+            </p>
+          </div>
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <h3 class="font-semibold text-gray-800 mb-2">
+              Ngân sách Tổng thể (BAC)
+            </h3>
+            <p class="text-gray-600">
+              Là tổng ngân sách dự kiến cho toàn bộ dự án. Đây là tổng chi phí
+              dự kiến khi dự án hoàn thành.
+            </p>
+          </div>
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <h3 class="font-semibold text-gray-800 mb-2">
+              Thời gian Dự kiến Ban đầu
+            </h3>
+            <p class="text-gray-600">
+              Là tổng thời gian dự kiến để hoàn thành toàn bộ dự án, được tính
+              bằng ngày.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div class="card">
@@ -217,7 +274,7 @@
           </div>
           <div class="result-item">
             <span class="result-label"
-              >Ước tính Thời gian Hoàn thành (tháng):</span
+              >Ước tính Thời gian Hoàn thành (ngày):</span
             >
             <span id="estimatedDuration" class="result-value">Chưa tính</span>
           </div>
@@ -269,10 +326,10 @@
         return value.toFixed(digits);
       }
 
-      // Hàm định dạng thời gian (tháng)
+      // Hàm định dạng thời gian (ngày)
       function formatDuration(value) {
         if (isNaN(value) || value === null || !isFinite(value)) return "N/A";
-        return `${formatDecimal(value, 2)} tháng`;
+        return `${formatDecimal(value, 2)} ngày`;
       }
 
       // Hàm thực hiện tính toán
@@ -464,6 +521,32 @@
           spiOutput.classList.add("text-gray-700");
         }
       }
+
+      // Hàm tạo dữ liệu ngẫu nhiên
+      function generateRandomData() {
+        const bac = Math.floor(Math.random() * 100000) + 50000; // BAC từ 50,000 đến 150,000
+        const duration = Math.floor(Math.random() * 60) + 30; // Thời gian từ 30 đến 90 ngày
+        const progress = Math.random() * 0.3 + 0.1; // Tiến độ từ 10% đến 40%
+
+        const ev = Math.floor(bac * progress); // EV = BAC * tiến độ
+        const pv = Math.floor(bac * (progress + 0.1)); // PV thường cao hơn EV một chút
+        const ac = Math.floor(ev * (Math.random() * 0.4 + 0.8)); // AC có thể cao hơn hoặc thấp hơn EV
+
+        // Cập nhật giá trị vào các input
+        pvInput.value = pv;
+        evInput.value = ev;
+        acInput.value = ac;
+        bacInput.value = bac;
+        durationInput.value = duration;
+
+        // Tính toán lại kết quả
+        calculateEVM();
+      }
+
+      // Gắn sự kiện click cho nút random
+      document
+        .getElementById("randomBtn")
+        .addEventListener("click", generateRandomData);
 
       // Gắn sự kiện click cho nút tính toán
       calculateBtn.addEventListener("click", calculateEVM);
